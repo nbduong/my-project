@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Layout from "./Layout/Layout";
+
 import { Dashboard } from "./page/Dashboard";
 import { Login } from "./Authenticate/Login";
 import { Signup } from "./Authenticate/Signup";
@@ -14,6 +14,10 @@ import { ManageCategory } from "./page/Admin/ManageCategory";
 import { ManageBrand } from "./page/Admin/ManageBrand";
 import ProductDetails from "./page/ProductDetails";
 import ProductList from "./page/ProductList";
+import { CartPage } from "./page/Cart";
+import { CheckoutPage } from "./page/Checkout";
+import UserOrderPage from "./page/User/UserPageOrder";
+import Layout from "./Layout/Layout";
 
 function App() {
   return (
@@ -31,6 +35,7 @@ function App() {
           </Route>
           <Route path="/user" element={<UserLayout />}>
             <Route path="/user/profile" element={<Profile />} />
+            <Route path="/user/order" element={<UserOrderPage />} />
           </Route>
           <Route path="/" element={<Dashboard />} />
           <Route path="/login" element={<Login />} />
@@ -38,6 +43,9 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/product/:id" element={<ProductDetails />} />
           <Route path="/products" element={<ProductList />} />
+          <Route path="/Cart" element={<CartPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+
         </Route>
       </Routes>
     </BrowserRouter>

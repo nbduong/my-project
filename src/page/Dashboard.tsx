@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 interface Product {
-  id: number;
+  id: string;
   name: string;
   productCode: string;
   description: string | null;
@@ -13,8 +13,8 @@ interface Product {
   categoryName: string;
   images: string[];
   specifications: { [key: string]: string };
+  isDeleted: boolean; // Thêm isDeleted vào interface
 }
-
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -52,17 +52,18 @@ export const Dashboard: React.FC = () => {
     }
   }, [error]);
 
-  const handleProductClick = (productId: number) => {
+  const handleProductClick = (productId: string) => {
     navigate(`/product/${productId}`);
   };
 
   const filteredProducts = products.filter(
     (product) =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.categoryName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.brandName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.productCode.toLowerCase().includes(searchTerm.toLowerCase())
+      !product.isDeleted && // Chỉ hiển thị sản phẩm có isDeleted là false
+      (product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (product.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.categoryName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.brandName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.productCode.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const sortedProducts = [...filteredProducts].sort((a, b) => {
@@ -198,11 +199,12 @@ export const Dashboard: React.FC = () => {
         return null;
     }
   };
+
   return (
-    <div className="container mx-auto p-6">
+    <div className="container mx-auto p-4">
       {Object.entries(groupedProducts).map(([category, categoryProducts]) => (
         <div key={category} className="mb-8 bg-white p-4 rounded-lg">
-          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center border-b-2 border-[#331A17] border-opacity-40 ">{getCategoryIcon(category)} {category || 'Danh mục khác'} </h2>
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center border-b-2 border-[#331A17] border-opacity-40">{getCategoryIcon(category)} {category || 'Danh mục khác'}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
             {categoryProducts.slice(0, 10).map((product) => (
               <div

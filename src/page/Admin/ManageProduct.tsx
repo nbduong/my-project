@@ -16,7 +16,7 @@ interface Brand {
 
 // Interface cho sản phẩm
 interface Product {
-    id: number;
+    id: string;
     name: string;
     productCode: string;
     description: string | null;
@@ -26,6 +26,7 @@ interface Product {
     categoryName: string;
     images: string[];
     specifications: { [key: string]: string };
+    isDeleted: boolean;
 }
 
 // Interface cho dữ liệu gửi về backend
@@ -38,6 +39,7 @@ interface ProductFormData {
     brandId: number;
     categoryId: number;
     specificationsJson: { [key: string]: string };
+    isDeleted: boolean; // Thêm isDeleted vào ProductFormData
 }
 
 interface ProductFormProps {
@@ -63,7 +65,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
         categories.find((category) => category.name === product.categoryName)?.id
     );
 
-    const handleInputChange = (field: keyof Product, value: string | number) => {
+    const handleInputChange = (field: keyof Product, value: string | number | boolean) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
     };
 
@@ -112,6 +114,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
                 brandId: selectedBrandId,
                 categoryId: selectedCategoryId,
                 specificationsJson,
+                isDeleted: formData.isDeleted, // Thêm isDeleted vào dữ liệu gửi
             };
             await onSubmit(updatedFormData, selectedImages);
         } finally {
@@ -195,6 +198,18 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
                         </select>
                     </div>
                     <div>
+                        <label className="block text-sm font-medium mb-2">Trạng thái</label>
+                        <label className="inline-flex items-center">
+                            <input
+                                type="checkbox"
+                                checked={formData.isDeleted}
+                                onChange={(e) => handleInputChange("isDeleted", e.target.checked)}
+                                className="form-checkbox h-5 w-5 text-blue-600"
+                            />
+                            <span className="ml-2 text-sm">Đã xóa</span>
+                        </label>
+                    </div>
+                    <div>
                         <label className="block text-sm font-medium mb-2">Thông số kỹ thuật</label>
                         {specFields.map((spec, index) => (
                             <div key={index} className="flex space-x-2 mb-2 items-center">
@@ -267,10 +282,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className={`bg-blue-600 text-white px-4 py-2 rounded ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""
-                                }`}
+                            className={`bg-blue-600 text-white px-4 py-2 rounded ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
                         >
-                            {isSubmitting ? "Đang lưu..." : "Lưu"}
+                            Lưu
                         </button>
                     </div>
                 </form>
@@ -340,6 +354,12 @@ const ViewProductModal: React.FC<{ product: Product; onClose: () => void }> = ({
                         <p className="border px-3 py-2 rounded">{product.categoryName || "Không có danh mục"}</p>
                     </div>
                     <div>
+                        <label className="block text-sm font-medium">Trạng thái</label>
+                        <p className="border px-3 py-2 rounded">
+                            {product.isDeleted ? "Đã xóa" : "Hoạt động"}
+                        </p>
+                    </div>
+                    <div>
                         <label className="block text-sm font-medium">Thông số kỹ thuật</label>
                         <div className="border px-3 py-2 rounded">
                             {Object.entries(product.specifications).map(([key, value]) => (
@@ -369,7 +389,7 @@ export const ManageProduct: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
-    const [brands, setbrands] = useState<Brand[]>([]);
+    const [brands, setBrands] = useState<Brand[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -418,7 +438,7 @@ export const ManageProduct: React.FC = () => {
         }
     };
 
-    const getAllbrands = async (accessToken: string) => {
+    const getAllBrands = async (accessToken: string) => {
         try {
             const response = await fetch(`${API_URL}/brand`, {
                 method: "GET",
@@ -427,9 +447,9 @@ export const ManageProduct: React.FC = () => {
             if (!response.ok) throw new Error("Không thể lấy danh sách thương hiệu");
             const data = await response.json();
             const brandData = Array.isArray(data.result) ? data.result : data.result?.data || [];
-            setbrands(brandData);
+            setBrands(brandData);
         } catch (err) {
-            console.error("Error fetching brand:", err);
+            console.error("Error fetching brands:", err);
             setError("Có lỗi xảy ra khi tải danh sách thương hiệu");
         }
     };
@@ -451,7 +471,7 @@ export const ManageProduct: React.FC = () => {
             setProducts(productsData);
         } catch (err) {
             console.error("Error fetching products:", err);
-            setError("Có lỗi xảy ra khi tải danh sách sản phẩm");
+            setError("Có lỗi xảy ra khi thếm sản phẩm");
         }
     };
 
@@ -460,30 +480,35 @@ export const ManageProduct: React.FC = () => {
         setIsEditModalOpen(true);
     };
 
-    const handleDeleteProduct = async (productId: number) => {
+    const handleDeleteProduct = async (productId: string) => {
         if (!window.confirm("Bạn có chắc muốn xóa sản phẩm này?")) return;
-        const previousProducts = [...products];
-        setProducts(products.filter((p) => p.id !== productId));
         try {
             const accessToken = getToken();
             const response = await fetch(`${API_URL}/products/${productId}`, {
                 method: "DELETE",
-                headers: { Authorization: `Bearer ${accessToken}` },
+                headers: {
+                    Authorization: `Bearer ${accessToken}`
+                },
             });
             if (response.status === 401) {
                 navigate("/login");
                 throw new Error("Phiên đăng nhập hết hạn");
             }
-            if (!response.ok) throw new Error("Không thể xóa sản phẩm");
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.message || "Không thể cập nhật trạng thái sản phẩm");
+            }
+            alert("Xóa sản phẩm thành công!");
+            window.location.reload();
         } catch (err) {
-            setProducts(previousProducts);
-            setError("Có lỗi xảy ra khi xóa sản phẩm");
+            console.error("Error updating product status:", err);
+            setError("Có lỗi xảy ra khi cập nhật trạng thái sản phẩm");
         }
     };
 
     const handleCreateProduct = () => {
         const newProduct: Product = {
-            id: 0,
+            id: "",
             name: "",
             productCode: "",
             description: null,
@@ -493,6 +518,7 @@ export const ManageProduct: React.FC = () => {
             categoryName: "",
             images: [],
             specifications: {},
+            isDeleted: false,
         };
         setSelectedProduct(newProduct);
         setIsCreateModalOpen(true);
@@ -509,9 +535,10 @@ export const ManageProduct: React.FC = () => {
             formDataToSend.append("quantity", formData.quantity.toString());
             formDataToSend.append("brandId", formData.brandId.toString());
             formDataToSend.append("categoryId", formData.categoryId.toString());
-            formDataToSend.append("specificationsJson", JSON.stringify(formData.specificationsJson)); // Đảm bảo tên trường khớp
+            formDataToSend.append("specificationsJson", JSON.stringify(formData.specificationsJson));
             formDataToSend.append("status", "1");
             formDataToSend.append("viewCount", "0");
+            formDataToSend.append("isDeleted", formData.isDeleted.toString());
             images.forEach((image) => formDataToSend.append("images", image));
 
             const response = await fetch(`${API_URL}/products`, {
@@ -535,7 +562,7 @@ export const ManageProduct: React.FC = () => {
             window.location.reload();
         } catch (err: any) {
             setError(err.message || "Có lỗi xảy ra khi tạo sản phẩm");
-            console.error("Error details:", err); // Thêm log để debug
+            console.error("Error details:", err);
         }
     };
 
@@ -551,7 +578,8 @@ export const ManageProduct: React.FC = () => {
             formDataToSend.append("brandId", formData.brandId.toString());
             formDataToSend.append("categoryId", formData.categoryId.toString());
             formDataToSend.append("specificationsJson", JSON.stringify(formData.specificationsJson));
-            formDataToSend.append("status", "1"); // Thêm trường status nếu bắt buộc
+            formDataToSend.append("status", "1");
+            formDataToSend.append("isDeleted", formData.isDeleted.toString());
             images.forEach((image) => formDataToSend.append("images", image));
 
             const response = await fetch(`${API_URL}/products/${selectedProduct?.id}`, {
@@ -575,7 +603,6 @@ export const ManageProduct: React.FC = () => {
             setIsEditModalOpen(false);
             setSelectedProduct(null);
             window.location.reload();
-
         } catch (err: any) {
             setError(err.message || "Có lỗi xảy ra khi cập nhật sản phẩm");
             console.error("Error details:", err);
@@ -598,7 +625,7 @@ export const ManageProduct: React.FC = () => {
                 checkAdmin(accessToken),
                 getAllProducts(accessToken),
                 getAllCategories(accessToken),
-                getAllbrands(accessToken),
+                getAllBrands(accessToken),
             ]);
             setIsLoading(false);
         };
@@ -633,6 +660,9 @@ export const ManageProduct: React.FC = () => {
         if (sortField === "price" || sortField === "quantity") {
             return (a[sortField] as number) - (b[sortField] as number);
         }
+        if (sortField === "isDeleted") {
+            return Number(a.isDeleted) - Number(b.isDeleted);
+        }
         const aValue = a[sortField] || "";
         const bValue = b[sortField] || "";
         return aValue.toString().localeCompare(bValue.toString());
@@ -665,10 +695,10 @@ export const ManageProduct: React.FC = () => {
                     <option value="">-- Sắp xếp theo --</option>
                     <option value="productCode">Mã sản phẩm</option>
                     <option value="name">Tên sản phẩm</option>
-                    <option value="brandName">Thương hiệu</option>
                     <option value="price">Giá</option>
                     <option value="quantity">Số lượng</option>
                     <option value="categoryName">Danh mục</option>
+                    <option value="isDeleted">Trạng thái</option>
                 </select>
             </div>
             <div className="overflow-x-auto">
@@ -676,10 +706,9 @@ export const ManageProduct: React.FC = () => {
                     <thead>
                         <tr className="bg-[#371A16] text-white text-sm uppercase tracking-wider">
                             <th className="py-3 px-4 border-b border-gray-200 text-center hidden sm:table-cell">ID</th>
-                            {/* <th className="py-3 px-4 border-b border-gray-200 text-center">Ảnh</th> */}
                             <th className="py-3 px-4 border-b border-gray-200 text-center">Mã sản phẩm</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center">Tên sản phẩm</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-center hidden md:table-cell">Thương hiệu</th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center hidden md:table-cell">Trạng thái</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center hidden md:table-cell">Số lượng</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center hidden md:table-cell">Giá</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center hidden lg:table-cell">Danh mục</th>
@@ -691,27 +720,16 @@ export const ManageProduct: React.FC = () => {
                             sortedProducts.map((product, index) => (
                                 <tr
                                     key={product.id}
-                                    className={`border-b border-gray-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                                        } hover:bg-gray-100 transition-colors duration-200`}
+                                    className={`border-b border-gray-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition-colors duration-200`}
                                 >
                                     <td className="py-3 px-4 text-center text-gray-700 hidden sm:table-cell">{product.id}</td>
-                                    {/* <td className="py-3 px-4 text-center w-48 h-32">
-                                        {product.images[0] ? (
-                                            <img
-                                                src={`${API_URL}/${product.images[0]}`}
-                                                alt={`${product.name} thumbnail`}
-                                                className="w-32 h-32 object-cover rounded-md mx-auto border border-gray-200"
-                                                onError={(e) => {
-                                                    e.currentTarget.src = "/avatar.png";
-                                                }}
-                                            />
-                                        ) : (
-                                            <span className="text-gray-400">Không có ảnh</span>
-                                        )}
-                                    </td> */}
                                     <td className="py-3 px-4 text-gray-700 text-center">{product.productCode}</td>
                                     <td className="py-3 px-4 text-gray-700 text-center">{product.name}</td>
-                                    <td className="py-3 px-4 text-gray-700 text-center hidden md:table-cell">{product.brandName}</td>
+                                    <td className="py-3 px-4 text-gray-700 text-center hidden md:table-cell">
+                                        <span
+                                            className={`inline-block w-3 h-3 rounded-full ${product.isDeleted ? "bg-red-500" : "bg-green-500"}`}
+                                        ></span>
+                                    </td>
                                     <td className="py-3 px-4 text-gray-700 text-center hidden md:table-cell">
                                         {product.quantity.toLocaleString()}
                                     </td>
@@ -789,7 +807,7 @@ export const ManageProduct: React.FC = () => {
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={8} className="py-3 px-4 text-center text-gray-500">
+                                <td colSpan={7} className="py-3 px-4 text-center text-gray-500">
                                     Không có sản phẩm
                                 </td>
                             </tr>

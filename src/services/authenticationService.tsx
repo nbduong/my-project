@@ -15,3 +15,5 @@ export const logOut = async () => {
   );
   removeToken();
 };
+
+export { getToken };

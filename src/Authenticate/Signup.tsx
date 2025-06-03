@@ -65,7 +65,7 @@ export const Signup = () => {
     };
 
     return (
-        <div className="flex items-center justify-center h-screen bg-[#ffeede]">
+        <div className="flex items-start justify-center h-screen bg-[#ffeede] ">
             <form
                 onSubmit={handleSubmit}
                 className=" p-8  w-[400px] bg-[#E7E8EA] shadow-2xl rounded-2xl"
