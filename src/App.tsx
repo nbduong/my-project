@@ -18,6 +18,7 @@ import { CartPage } from "./page/Cart";
 import { CheckoutPage } from "./page/Checkout";
 import UserOrderPage from "./page/User/UserPageOrder";
 import Layout from "./Layout/Layout";
+import { Chatbot } from "./page/ChatBot";
 
 function App() {
   return (
@@ -45,7 +46,7 @@ function App() {
           <Route path="/products" element={<ProductList />} />
           <Route path="/Cart" element={<CartPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
-
+          <Route path="/chatbot" element={<Chatbot />} />
         </Route>
       </Routes>
     </BrowserRouter>

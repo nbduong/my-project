@@ -38,7 +38,26 @@ export default function Layout() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
 
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (accountRef.current && !accountRef.current.contains(event.target as Node)) {
+        setShowAccountMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+
+  const toggleAccountMenu = () => {
+    setShowAccountMenu((prev) => !prev);
+  };
   const debounce = (func: (...args: any[]) => void, delay: number) => {
     let timeoutId: NodeJS.Timeout;
     return (...args: any[]) => {
@@ -492,6 +511,22 @@ export default function Layout() {
 
           <div className="flex items-center space-x-4">
             <div className="relative group h-[100px] flex items-center">
+              <Link to="/chatbot" className="text-white">
+                <div className="flex flex-col items-center relative mr-4">
+                  <div className="hover:opacity-50 flex flex-col items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" className="size-8">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 0 1 1.037-.443 48.282 48.282 0 0 0 5.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+                    </svg>
+
+                    <p>Chat Bot</p>
+                    {getTotalItems() > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {getTotalItems()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </Link>
               <Link to="/cart" className="text-white">
                 <div className="flex flex-col items-center relative">
                   <div className="hover:opacity-50 flex flex-col items-center">
@@ -582,75 +617,93 @@ export default function Layout() {
               </div>
             </div>
 
-            {isLoggedIn ? (
-              <Link to={isAdmin ? '/admin' : '/user'}>
-                <div className="right text-white group h-[100px] flex items-center">
-                  <div className="flex flex-col items-center">
-                    <div className="hover:opacity-50 flex flex-col items-center">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth="1.5"
-                        stroke="currentColor"
-                        className="size-8"
+            <div className="relative" ref={accountRef}>
+              {isLoggedIn ? (
+                <div className="text-white h-[100px] flex items-center">
+                  <button
+                    onClick={toggleAccountMenu}
+                    className="flex flex-col items-center hover:opacity-80 transition-opacity"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth="1.5"
+                      stroke="currentColor"
+                      className="size-8"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
+                      />
+                    </svg>
+                    <p>Tài khoản</p>
+                  </button>
+                  {showAccountMenu && (
+                    <div className="absolute top-20 left-[-30px] w-32 text-center bg-white text-black rounded-lg shadow-lg z-50 transform transition-all duration-200 ease-in-out">
+                      <Link
+                        to={isAdmin ? '/admin' : '/user'}
+                        className="block px-4 py-2 text-sm hover:bg-gray-100 transition-colors rounded-t-lg"
+                        onClick={() => setShowAccountMenu(false)}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
-                        />
-                      </svg>
-                      <p>Tài khoản</p>
-                    </div>
-                    <div className="text-[14px] absolute top-20 w-[130px] bg-white text-black group-hover:flex flex-col text-center hidden">
+                        {isAdmin ? 'Quản trị' : 'Tài khoản'}
+                      </Link>
                       <button
-                        onClick={handleLogout}
-                        className="px-4 py-2 hover:text-[#371A16]"
+                        onClick={() => {
+                          handleLogout();
+                          setShowAccountMenu(false);
+                        }}
+                        className="w-full text-center px-4 py-2 text-sm hover:bg-gray-100 transition-colors rounded-b-lg"
                       >
                         Đăng xuất
                       </button>
                     </div>
-                  </div>
+                  )}
                 </div>
-              </Link>
-            ) : (
-              <Link to="/login">
-                <div className="right text-white group h-[100px] flex items-center">
-                  <div className="flex flex-col items-center">
-                    <div className="hover:opacity-50 flex flex-col items-center">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth="1.5"
-                        stroke="currentColor"
-                        className="size-8"
+              ) : (
+                <div className="text-white h-[100px] flex items-center">
+                  <button
+                    onClick={toggleAccountMenu}
+                    className="flex flex-col items-center hover:opacity-80 transition-opacity"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth="1.5"
+                      stroke="currentColor"
+                      className="size-8"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
+                      />
+                    </svg>
+                    <p>Tài khoản</p>
+                  </button>
+                  {showAccountMenu && (
+                    <div className="absolute top-20 left-[-30px] w-32 text-center bg-white text-black rounded-lg shadow-lg z-50 transform transition-all duration-200 ease-in-out">
+                      <Link
+                        to="/login"
+                        className="block px-4 py-2 text-sm hover:bg-gray-100 transition-colors rounded-t-lg"
+                        onClick={() => setShowAccountMenu(false)}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
-                        />
-                      </svg>
-                      <p>Tài khoản</p>
-                    </div>
-                    <div className="text-[14px] absolute top-20 w-[130px] bg-white text-black group-hover:flex flex-col text-center hidden items-center">
-                      <Link to="/login">
-                        <button className="px-4 py-2 hover:text-[#371A16] w-[130px]">
-                          Đăng nhập
-                        </button>
+                        Đăng nhập
                       </Link>
-                      <Link to="/signup">
-                        <button className="px-4 py-2 hover:text-[#371A16] w-[130px]">
-                          Đăng ký
-                        </button>
+                      <Link
+                        to="/signup"
+                        className="block px-4 py-2 text-sm hover:bg-gray-100 transition-colors rounded-b-lg"
+                        onClick={() => setShowAccountMenu(false)}
+                      >
+                        Đăng ký
                       </Link>
                     </div>
-                  </div>
+                  )}
                 </div>
-              </Link>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </header>
