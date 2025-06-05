@@ -40,7 +40,7 @@ export const loadCart = (): CartItem[] => {
         parsedCart.every(
           (item) =>
             item.product &&
-            typeof item.product.id === 'number' &&
+            typeof item.product.id === 'string' &&
             typeof item.quantity === 'number' &&
             item.quantity > 0
         )
@@ -62,13 +62,16 @@ export const loadCart = (): CartItem[] => {
 
 export const saveCart = (cartItems: CartItem[]): void => {
   try {
-    if (Array.isArray(cartItems) && (cartItems.length === 0 || cartItems.every(
-      (item) =>
-        item.product &&
-        typeof item.product.id === 'number' &&
-        typeof item.quantity === 'number' &&
-        item.quantity > 0
-    ))
+    if (
+      Array.isArray(cartItems) &&
+      (cartItems.length === 0 ||
+        cartItems.every(
+          (item) =>
+            item.product &&
+            typeof item.product.id === 'string' && // Change from 'number' to 'string'
+            typeof item.quantity === 'number' &&
+            item.quantity > 0
+        ))
     ) {
       console.log('saveCart: Saving cart to localStorage:', cartItems);
       localStorage.setItem('cart', JSON.stringify(cartItems));

@@ -8,8 +8,16 @@ interface Message {
 interface Product {
     id: string;
     name: string;
+    productCode: string;
+    description: string | null;
     price: number;
-    category: string;
+    quantity: number;
+    brandName: string;
+    categoryName: string;
+    images: string[];
+    specifications: { [key: string]: string };
+    status: string; // 0: Hết hàng, 1: Hàng sẵn có
+    viewCount: number; // Lượt xem sản phẩm
 }
 
 export const Chatbot: React.FC = () => {
@@ -70,7 +78,7 @@ export const Chatbot: React.FC = () => {
         const history = newMessages
             .map(msg => `${msg.sender === 'user' ? 'User' : 'Assistant'}: ${msg.text}`)
             .join('\n');
-        const prompt = `Bạn là một trợ lý AI của cửa hàng GearVN, chuyên gia về cấu hình và linh kiện máy tính. Dựa trên lịch sử hội thoại và danh sách sản phẩm dưới đây, trả lời câu hỏi hiện tại hoặc gợi ý sản phẩm phù hợp một cách ngắn gọn, trực tiếp và liên quan đến ngữ cảnh. Nếu người dùng yêu cầu gợi ý sản phẩm, hãy sử dụng danh sách sản phẩm để đưa ra gợi ý cụ thể, bao gồm tên sản phẩm, giá và lý do gợi ý. Danh sách sản phẩm:\n${productList}\n\nLịch sử hội thoại:\n${history}\n\nUser: ${input}`;
+        const prompt = `Bạn là một trợ lý AI của cửa hàng GearVN, chuyên gia về cấu hình và linh kiện máy tính. Dựa trên lịch sử hội thoại và danh sách sản phẩm dưới đây, trả lời câu hỏi hiện tại hoặc gợi ý sản phẩm phù hợp một cách ngắn gọn trong khoảng 3 dòng đến 5 dòng là nhiều nhất, trực tiếp và liên quan đến ngữ cảnh. Nếu người dùng yêu cầu gợi ý sản phẩm, hãy sử dụng danh sách sản phẩm để đưa ra gợi ý cụ thể, bao gồm tên sản phẩm, giá và lý do gợi ý. Danh sách sản phẩm:\n${productList}\n\nLịch sử hội thoại:\n${history}\n\nUser: ${input}`;
 
         try {
             console.log('Sending request to Ollama...');

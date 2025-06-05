@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, useOutletContext, Link } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { saveCart } from "../services/localStorageService";
 
 // Interface for Product
 interface Product {
@@ -26,12 +27,16 @@ interface Review {
     date: string;
 }
 
+interface CartItem {
+    product: Product;
+    quantity: number;
+}
+
 const API_URL = "http://localhost:8080/datn";
 
 export default function ProductDetails() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { addToCart } = useOutletContext<{ addToCart: (product: Product, quantity: number) => void }>();
     const [product, setProduct] = useState<Product | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -108,32 +113,76 @@ export default function ProductDetails() {
     };
 
     const handleAddToCart = () => {
-        if (product) {
-            if (product.status === "0") {
-                alert("Sản phẩm hiện đã hết hàng!");
-                return;
-            }
-            if (quantity > product.quantity) {
-                alert(`Chỉ còn ${product.quantity} sản phẩm trong kho!`);
-                return;
-            }
-            addToCart(product, quantity);
-            alert(`Đã thêm ${quantity} ${product.name} vào giỏ hàng!`);
-        }
-    };
-
-    const handleBuyNow = () => {
-        if (product && product.status === "0") {
+    if (product) {
+        if (product.status === "0") {
             alert("Sản phẩm hiện đã hết hàng!");
             return;
         }
-        if (quantity > (product?.quantity || 0)) {
-            alert(`Chỉ còn ${product?.quantity} sản phẩm trong kho!`);
+        if (quantity > product.quantity) {
+            alert(`Chỉ còn ${product.quantity} sản phẩm trong kho!`);
             return;
         }
-        navigate("/cart", { state: { product, quantity } });
-    };
+        // Create the new cart item
+        const cartItem: CartItem = { product, quantity };
+        // Get the existing cart from local storage
+        const existingCart: CartItem[] = JSON.parse(localStorage.getItem("cart") || "[]");
+        // Check if the product already exists in the cart
+        const existingItemIndex = existingCart.findIndex(item => item.product.id === product.id);
+        let updatedCart: CartItem[];
+        if (existingItemIndex !== -1) {
+            // If the product exists, update its quantity
+            updatedCart = [...existingCart];
+            updatedCart[existingItemIndex].quantity += quantity;
+            // Ensure the updated quantity doesn't exceed stock
+            if (updatedCart[existingItemIndex].quantity > product.quantity) {
+                updatedCart[existingItemIndex].quantity = product.quantity;
+                alert(`Đã cập nhật số lượng, nhưng chỉ còn ${product.quantity} sản phẩm trong kho!`);
+            }
+        } else {
+            // If the product doesn't exist, add it to the cart
+            updatedCart = [...existingCart, cartItem];
+        }
+        // Save the updated cart
+        saveCart(updatedCart);
+        alert(`Đã thêm ${quantity} ${product.name} vào giỏ hàng!`);
+    }
+};
 
+    const handleBuyNow = () => {
+    if (product) {
+        if (product.status === "0") {
+            alert("Sản phẩm hiện đã hết hàng!");
+            return;
+        }
+        if (quantity > product.quantity) {
+            alert(`Chỉ còn ${product.quantity} sản phẩm trong kho!`);
+            return;
+        }
+        // Create the new cart item
+        const cartItem: CartItem = { product, quantity };
+        // Get the existing cart from local storage
+        const existingCart: CartItem[] = JSON.parse(localStorage.getItem("cart") || "[]");
+        // Check if the product already exists in the cart
+        const existingItemIndex = existingCart.findIndex(item => item.product.id === product.id);
+        let updatedCart: CartItem[];
+        if (existingItemIndex !== -1) {
+            // If the product exists, update its quantity
+            updatedCart = [...existingCart];
+            updatedCart[existingItemIndex].quantity += quantity;
+            // Ensure the updated quantity doesn't exceed stock
+            if (updatedCart[existingItemIndex].quantity > product.quantity) {
+                updatedCart[existingItemIndex].quantity = product.quantity;
+                alert(`Đã cập nhật số lượng, nhưng chỉ còn ${product.quantity} sản phẩm trong kho!`);
+            }
+        } else {
+            // If the product doesn't exist, add it to the cart
+            updatedCart = [...existingCart, cartItem];
+        }
+        // Save the updated cart
+        saveCart(updatedCart);
+        navigate("/cart", { state: { product, quantity } });
+    }
+};
     const handleThumbnailClick = (img: string) => {
         setIsFading(true);
         setTimeout(() => {
@@ -212,20 +261,6 @@ export default function ProductDetails() {
             </div>
         );
     }
-
-    // if (error) {
-    //     return (
-    //         <div className="text-center py-10">
-    //             <p className="text-red-500 text-lg">{error}</p>
-    //             <button
-    //                 onClick={() => { setError(null); setIsLoading(true); fetchProduct(); }}
-    //                 className="mt-4 px-4 py-2 bg-[#6B4E31] text-white rounded hover:bg-[#8B6F47] transition-colors"
-    //             >
-    //                 Thử lại
-    //             </button>
-    //         </div>
-    //     );
-    // }
 
     if (!product) {
         return <p className="text-center text-gray-600 text-lg py-10">Không tìm thấy sản phẩm</p>;

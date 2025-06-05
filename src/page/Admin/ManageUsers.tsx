@@ -103,6 +103,8 @@ export const ManageUsers = () => {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [sortField, setSortField] = useState<keyof User | "">("");
     const [searchTerm, setSearchTerm] = useState("");
+    const [countId, setCountId] = useState(1);
+
 
     const checkAdmin = async (accessToken: string) => {
         try {
@@ -318,13 +320,14 @@ export const ManageUsers = () => {
                 <table className="min-w-full border">
                     <thead>
                         <tr className="bg-[#371A16] text-white">
-                            <th className="p-2">ID</th><th>Username</th><th>Tên</th><th>Email</th><th>Điện thoại</th><th>Vai trò</th><th>Trạng thái</th><th>Hành động</th>
+                            <th className="p-2">Số thứ tự</th><th>Username</th><th>Tên</th><th>Email</th><th>Điện thoại</th><th>Vai trò</th><th>Trạng thái</th><th>Hành động</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {sortedUsers.length > 0 ? sortedUsers.map((user) => (
+                        {sortedUsers.length > 0 ? sortedUsers.map((user, index) => (
+                            
                             <tr key={user.id} className="border-t">
-                                <td className="p-2">{user.id}</td>
+                                <td className="p-2 text-center">{index+1}</td>
                                 <td>{user.username}</td>
                                 <td>{user.name}</td>
                                 <td>{user.email}</td>

@@ -56,7 +56,7 @@ export function CheckoutPage() {
                     status: 'Chưa thanh toán',
                     shippingAddress,
                     paymentMethod,
-                    totalAmount: totalAmount.toString(), // đảm bảo là string
+                    totalAmount: (totalAmount + 30000).toString(), // đảm bảo là string
                     shipmentMethod: shippingMethod,      // đổi tên từ shippingMethod -> shipmentMethod
                     orderNote,
                     orderItems: cartItems.map((item: any) => ({
@@ -134,8 +134,19 @@ export function CheckoutPage() {
                         />
                     </div>
 
-                    <div className="text-right font-bold text-lg mt-6">
-                        Tổng cộng: {totalAmount.toLocaleString()} VNĐ
+                    <div className="text-right font-bold mt-6 flex flex-col items-end">
+                        <span className='flex justify-between w-[300px] items-center'>
+                            <span className='text-sm font-normal'>Tạm tính: </span>
+                            <span>{totalAmount.toLocaleString()} VNĐ</span>
+                        </span>
+                        <span className='flex justify-between w-[300px] items-center'>
+                            <span className='text-sm font-normal'>Vận chuyển: </span>
+                            <span>30,000 VNĐ</span>
+                        </span>
+                        <span className='flex justify-between w-[300px] items-center'>
+                            <span className='text-sm font-normal'>Thành tiền: </span>
+                            <span className='text-lg text-red-500'>{(totalAmount + 30000).toLocaleString()} VNĐ</span>
+                        </span>
                     </div>
 
                     <button
@@ -148,10 +159,9 @@ export function CheckoutPage() {
                 </div>
             </div>
 
-            {/* RIGHT - Cart items preview */}
             <div>
                 <h2 className="text-2xl font-bold mb-4">Sản phẩm trong giỏ hàng</h2>
-                <div className="space-y-4 max-h-[70vh] overflow-y-auto border p-4 rounded">
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto border p-4 rounded-lg bg-white">
                     {cartItems.length === 0 ? (
                         <p>Không có sản phẩm nào.</p>
                     ) : (

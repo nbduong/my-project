@@ -305,7 +305,7 @@ export const ManageOrder: React.FC = () => {
                 <table className="min-w-full border border-gray-300 rounded-lg shadow-sm">
                     <thead>
                         <tr className="bg-[#371A16] text-white text-sm uppercase tracking-wider">
-                            <th className="py-3 px-4 border-b border-gray-200 text-center">ID</th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center">Số thứ tự</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center">Ngày tạo</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-start">Tên khách hàng</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-start">Tổng tiền</th>
@@ -319,7 +319,7 @@ export const ManageOrder: React.FC = () => {
                                 key={order.id}
                                 className={`border-b border-gray-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition-colors duration-200`}
                             >
-                                <td className="py-3 px-4 text-center text-gray-700">{order.id}</td>
+                                <td className="py-3 px-4 text-center text-gray-700">{index+1}</td>
                                 <td className="py-3 px-4 text-gray-700">{order.createdDate
                                     ? new Date(order.createdDate).toLocaleString("vi-VN", {
                                         day: "2-digit",

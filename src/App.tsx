@@ -32,7 +32,7 @@ function App() {
             <Route path="/admin/news" element={<ManageNews />} />
             <Route path="/admin/category" element={<ManageCategory />} />
             <Route path="/admin/brand" element={<ManageBrand />} />
-
+            <Route path="/admin/dashboard" element={<ManageBrand />} />
           </Route>
           <Route path="/user" element={<UserLayout />}>
             <Route path="/user/profile" element={<Profile />} />

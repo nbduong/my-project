@@ -705,7 +705,7 @@ export const ManageProduct: React.FC = () => {
                 <table className="min-w-full border border-gray-300 rounded-lg shadow-sm">
                     <thead>
                         <tr className="bg-[#371A16] text-white text-sm uppercase tracking-wider">
-                            <th className="py-3 px-4 border-b border-gray-200 text-center hidden sm:table-cell">ID</th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center hidden sm:table-cell">Số thứ tự</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center">Mã sản phẩm</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center">Tên sản phẩm</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center hidden md:table-cell">Trạng thái</th>
@@ -722,7 +722,7 @@ export const ManageProduct: React.FC = () => {
                                     key={product.id}
                                     className={`border-b border-gray-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition-colors duration-200`}
                                 >
-                                    <td className="py-3 px-4 text-center text-gray-700 hidden sm:table-cell">{product.id}</td>
+                                    <td className="py-3 px-4 text-center text-gray-700 hidden sm:table-cell">{index+1}</td>
                                     <td className="py-3 px-4 text-gray-700 text-center">{product.productCode}</td>
                                     <td className="py-3 px-4 text-gray-700 text-center">{product.name}</td>
                                     <td className="py-3 px-4 text-gray-700 text-center hidden md:table-cell">

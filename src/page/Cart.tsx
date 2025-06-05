@@ -1,9 +1,9 @@
-import { useOutletContext, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
-import { getToken } from '../services/localStorageService';
+import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { getToken, loadCart } from '../services/localStorageService';
 
 interface Product {
-    id: number;
+    id: string;
     name: string;
     productCode: string;
     price: number;
@@ -20,22 +20,42 @@ interface CartItem {
 const API_URL = 'http://localhost:8080/datn';
 
 export function CartPage() {
-    const {
-        cartItems,
-        removeFromCart,
-        updateQuantity,
-        getTotalItems,
-        getTotalPrice,
-    } = useOutletContext<{
-        cartItems: CartItem[];
-        removeFromCart: (productId: number) => void;
-        updateQuantity: (productId: number, quantity: number) => void;
-        getTotalItems: () => number;
-        getTotalPrice: () => number;
-    }>();
-
-    const navigate = useNavigate();
+    const [cartItems, setCartItems] = useState<CartItem[]>([]);
     const [isLoading] = useState(false); // ✅ Loading flag
+    const navigate = useNavigate();
+
+    // Load cart from localStorage on mount
+    useEffect(() => {
+        const loadedCart = loadCart();
+        setCartItems(loadedCart);
+    }, []);
+
+    // Remove item from cart
+    const removeFromCart = (productId: string) => {
+        const updatedCart = cartItems.filter(item => item.product.id !== productId);
+        setCartItems(updatedCart);
+        localStorage.setItem('cart', JSON.stringify(updatedCart));
+    };
+
+    // Update quantity of an item
+    const updateQuantity = (productId: string, quantity: number) => {
+        if (quantity < 1) return; // Prevent negative or zero quantity
+        const updatedCart = cartItems.map(item =>
+            item.product.id === productId ? { ...item, quantity: Math.min(quantity, 999) } : item // Cap quantity at 999
+        );
+        setCartItems(updatedCart);
+        localStorage.setItem('cart', JSON.stringify(updatedCart));
+    };
+
+    // Calculate total number of items
+    const getTotalItems = (): number => {
+        return cartItems.reduce((total, item) => total + item.quantity, 0);
+    };
+
+    // Calculate total price
+    const getTotalPrice = (): number => {
+        return cartItems.reduce((total, item) => total + item.product.price * item.quantity, 0);
+    };
 
     const handlePayment = () => {
         const accessToken = getToken();
