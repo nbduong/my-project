@@ -1,67 +1,77 @@
-import { useEffect, useState } from "react";
-import { useSearchParams, useNavigate, Link } from "react-router-dom";
+
+import { useEffect, useState, useCallback } from "react";
+import { useSearchParams, useNavigate, Link, useOutletContext } from "react-router-dom";
+import axios, { AxiosError } from "axios";
+import { toast } from "react-toastify";
+import { ProductCard } from "./Dashboard";
 
 interface Product {
     id: string;
     name: string;
     productCode: string;
     price: number;
+    quantity: number;
+    brandName: string;
+    categoryName: string;
     images: string[];
-    brandName?: string;
-    categoryName?: string;
-    isDeleted: boolean; // Thêm isDeleted vào interface
+    isDeleted: boolean;
+}
+
+interface OutletContext {
+    addToCart: (product: Product) => void;
 }
 
 const API_URL = "http://localhost:8080/datn";
 
+// Utility to sanitize query strings
+const sanitizeQuery = (input: string) => {
+    return input.replace(/[<>&;]/g, "");
+};
+
 export default function ProductList() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const { addToCart } = useOutletContext<OutletContext>();
     const [products, setProducts] = useState<Product[]>([]);
     const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const query = searchParams.get("query") || "";
-    const categoryName = searchParams.get("categoryName") || "";
+    const query = sanitizeQuery(searchParams.get("query") || "");
+    const categoryName = sanitizeQuery(searchParams.get("categoryName") || "");
 
-    const fetchProducts = async () => {
+    const fetchProducts = useCallback(async () => {
         try {
-            setIsLoading(true);
-            const response = await fetch(`${API_URL}/products`, {
-                method: "GET",
-            });
-
-            if (!response.ok) {
-                throw new Error("Không thể lấy danh sách sản phẩm");
-            }
-
-            const data = await response.json();
-            const productsData = Array.isArray(data.result) ? data.result : data.result?.data || [];
-            setProducts(productsData);
-
-            // Lọc sản phẩm dựa trên query hoặc categoryName và isDeleted
-            let filtered = productsData.filter((product: Product) => !product.isDeleted);
-            if (query) {
-                filtered = filtered.filter((product: Product) =>
-                    product.name.toLowerCase().includes(query.toLowerCase())
-                );
-            } else if (categoryName) {
-                filtered = filtered.filter(
-                    (product: Product) => product.categoryName === categoryName
-                );
-            }
-            setFilteredProducts(filtered);
-        } catch (error) {
-            console.error("Error fetching products:", error);
+            const response = await axios.get(`${API_URL}/products`);
+            const productsData = Array.isArray(response.data.result)
+                ? response.data.result
+                : response.data.result?.data || [];
+            if (!Array.isArray(productsData)) throw new Error('Invalid product data format');
+            setProducts(productsData.filter((p: Product) => !p.isDeleted));
+        } catch (err) {
+            toast.error(axios.isAxiosError(err) ? err.message : 'Failed to load products');
         } finally {
-            setIsLoading(false);
         }
-    };
+    }, []);
 
+    // Increment view count on product click
+    const incrementViewCount = useCallback(async (productId: string) => {
+        try {
+            await axios.post(`${API_URL}/products/${productId}/view`, {});
+        } catch (err) {
+            console.error(`Failed to increment view count for product ${productId}:`, err);
+        }
+    }, []);
+
+    const handleProductClick = useCallback((productId: string) => {
+        incrementViewCount(productId);
+        navigate(`/product/${productId}`);
+    }, [incrementViewCount, navigate]);
+
+    // Fetch products on mount
     useEffect(() => {
         fetchProducts();
-    }, [navigate]);
+    }, []);
 
-    // Cập nhật danh sách sản phẩm khi query hoặc categoryName thay đổi
+    // Filter products when query, categoryName, or products change
     useEffect(() => {
         let filtered = products.filter((product: Product) => !product.isDeleted);
         if (query) {
@@ -77,9 +87,9 @@ export default function ProductList() {
     }, [query, categoryName, products]);
 
     return (
-        <div className="container mx-auto p-4">
-            <div className="mb-8 bg-white p-4 rounded-lg">
-                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center border-b-2 border-[#331A17] border-opacity-40">
+        <div className="container mx-auto p-4 sm:p-6 bg-[#F3F4F6] min-h-screen">
+            <div className="mb-8 bg-white p-4 sm:p-6 rounded-lg shadow-md">
+                <h2 className="text-xl sm:text-2xl font-bold text-[#1E3A8A] mb-4 flex items-center border-b-2 border-[#1E3A8A] border-opacity-40">
                     {query
                         ? `Kết quả tìm kiếm cho "${query}"`
                         : categoryName
@@ -87,52 +97,40 @@ export default function ProductList() {
                             : "Tất cả sản phẩm"}
                 </h2>
                 {isLoading ? (
-                    <p className="text-center text-gray-500">Đang tải sản phẩm...</p>
-                ) : filteredProducts.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                        {filteredProducts.map((product) => (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                        {[...Array(5)].map((_, i) => (
                             <div
-                                key={product.id}
-                                onClick={() => navigate(`/product/${product.id}`)}
-                                className="border rounded-lg shadow-md p-2 bg-white hover:shadow-lg transition-shadow duration-200 cursor-pointer flex flex-col h-full"
+                                key={i}
+                                className="border rounded-lg shadow-md p-4 bg-white flex flex-col h-64 animate-pulse"
                             >
-                                <img
-                                    src={`${API_URL}/${product.images[0] || '/avatar.png'}`}
-                                    alt={`${product.name} thumbnail`}
-                                    className="w-full h-40 object-cover rounded-md mb-2"
-                                    onError={(e) => {
-                                        e.currentTarget.src = '/avatar.png';
-                                    }}
-                                />
-                                <h3 className="text-xs text-gray-800 font-semibold line-clamp-2">{product.name}</h3>
-                                <p className="text-xs text-gray-600 mt-1">Mã: {product.productCode}</p>
-                                <p className="text-lg font-semibold text-gray-800 mt-1">
-                                    {product.price.toLocaleString()} VNĐ
-                                </p>
-                                <div className="mt-auto flex items-center justify-between">
-                                    <div className="text-xs text-green-500 flex items-center">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="size-6 mr-1">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                                        </svg>
-                                        Sẵn sàng
-                                    </div>
-                                    <div className="">
-                                        <button
-                                            className="flex items-center px-2 py-1 bg-[#371A16] text-white text-xs rounded hover:bg-yellow-200 hover:text-[#371A16] transition-colors"
-                                        >
-                                            Mua ngay
-                                        </button>
-                                    </div>
-                                </div>
+                                <div className="w-full h-40 bg-gray-200 rounded-md mb-2"></div>
+                                <div className="h-4 bg-gray-200 rounded w-3/4 mb-1"></div>
+                                <div className="h-4 bg-gray-200 rounded w-1/2 mb-1"></div>
+                                <div className="h-4 bg-gray-200 rounded w-2/3 mt-auto"></div>
                             </div>
+                        ))}
+                    </div>
+                ) : filteredProducts.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                        {filteredProducts.map((product) => (
+                            <ProductCard
+                                key={product.id}
+                                product={product}
+                                onClick={handleProductClick}
+                                addToCart={addToCart}
+                            />
                         ))}
                     </div>
                 ) : (
                     <div className="text-center py-10">
-                        <p className="text-gray-500 text-lg">
+                        <p className="text-[#1F2937] text-lg">
                             Không tìm thấy sản phẩm phù hợp với "{query || categoryName || "tất cả"}".
                         </p>
-                        <Link to="/" className="text-[#371A17] underline hover:text-yellow-200">
+                        <Link
+                            to="/"
+                            className="text-[#3B82F6] underline hover:text-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                            aria-label="Quay lại trang chính"
+                        >
                             Quay lại trang chính
                         </Link>
                     </div>

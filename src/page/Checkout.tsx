@@ -1,190 +1,317 @@
-import { useEffect, useState } from 'react';
+
+import { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { toast } from 'react-toastify';
 import { clearCart, getToken } from '../services/localStorageService';
 
 const API_URL = 'http://localhost:8080/datn';
+const SHIPPING_COST = 30000;
+
+interface Product {
+    id: string;
+    name: string;
+    price: number;
+    images: string[];
+    categoryName?: string;
+}
+
+interface CartItem {
+    product: Product;
+    quantity: number;
+}
+
+interface UserInfo {
+    id: string;
+    username: string;
+    address?: string;
+}
 
 export function CheckoutPage() {
     const location = useLocation();
     const navigate = useNavigate();
     const token = getToken();
 
-    const [userId, setUserId] = useState('');
+    const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
     const [shippingAddress, setShippingAddress] = useState('');
     const [paymentMethod, setPaymentMethod] = useState('cash');
     const [shippingMethod, setShippingMethod] = useState('viettelpost');
     const [orderNote, setOrderNote] = useState('');
-    const [userName, setUserName] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [addressError, setAddressError] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
 
-    const cartItems = location.state?.cartItems || [];
-    const totalAmount = location.state?.totalPrice || 0;
+    const cartItems: CartItem[] = location.state?.cartItems || [];
+    const totalAmount: number = location.state?.totalPrice || 0;
 
+    // Validate cart items
+    useEffect(() => {
+        if (!cartItems.length) {
+            toast.error('Giỏ hàng trống. Vui lòng thêm sản phẩm.');
+            navigate('/cart');
+        }
+    }, [cartItems, navigate]);
+
+    // Fetch user info
     useEffect(() => {
         if (!token) {
-            alert('Vui lòng đăng nhập');
-            navigate('/login');
-        } else {
-            fetch(`${API_URL}/users/myInfo`, {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-                .then(res => res.json())
-                .then(data => {
-                    setUserId(data.result.id);
-                    setShippingAddress(data.result.address || '');
-                    setUserName(data.result.username);
-                })
-                .catch(() => {
-                    alert('Lỗi khi tải thông tin người dùng');
-                    navigate('/cart');
-                });
+            toast.error('Vui lòng đăng nhập để tiếp tục.');
+            navigate('/login', { state: { from: location.pathname } });
+            return;
         }
-    }, [token, navigate]);
 
-    const handleConfirmOrder = async () => {
+        const controller = new AbortController();
+        setIsLoading(true);
+        axios
+            .get(`${API_URL}/users/myInfo`, {
+                headers: { Authorization: `Bearer ${token}` },
+                signal: controller.signal,
+            })
+            .then((res) => {
+                const data = res.data.result;
+                setUserInfo({
+                    id: data.id,
+                    username: data.username,
+                    address: data.address || '',
+                });
+                setShippingAddress(data.address || '');
+            })
+            .catch((err) => {
+                if (axios.isCancel(err)) return;
+                if (err.response?.status === 401) {
+                    toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+                    navigate('/login', { state: { from: location.pathname } });
+                } else {
+                    toast.error('Lỗi khi tải thông tin người dùng.');
+                    navigate('/cart');
+                }
+            })
+            .finally(() => setIsLoading(false));
+
+        return () => controller.abort();
+    }, [token, navigate, location.pathname]);
+
+    // Handle order submission
+    const handleConfirmOrder = useCallback(async () => {
+        if (!shippingAddress.trim()) {
+            setAddressError('Vui lòng nhập địa chỉ giao hàng.');
+            toast.error('Địa chỉ giao hàng là bắt buộc.');
+            return;
+        }
+        setAddressError('');
         setIsSubmitting(true);
+
         try {
-            const response = await fetch(`${API_URL}/orders/place`, {
-                method: 'POST',
+            await axios.post(`${API_URL}/orders/place`, {
+                userId: userInfo?.id,
+                userName: userInfo?.username,
+                status: 'Chưa thanh toán',
+                shippingAddress,
+                paymentMethod,
+                totalAmount: totalAmount + SHIPPING_COST,
+                shipmentMethod: shippingMethod,
+                orderNote,
+                orderItems: cartItems.map((item) => ({
+                    productId: item.product.id,
+                    quantity: item.quantity,
+                })),
+            }, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    userId,
-                    userName: userName,
-                    status: 'Chưa thanh toán',
-                    shippingAddress,
-                    paymentMethod,
-                    totalAmount: (totalAmount + 30000).toString(), // đảm bảo là string
-                    shipmentMethod: shippingMethod,      // đổi tên từ shippingMethod -> shipmentMethod
-                    orderNote,
-                    orderItems: cartItems.map((item: any) => ({
-                        productId: item.product.id.toString(),   // string
-                        quantity: item.quantity.toString(),      // string
-                    })),
-                }),
             });
 
-            if (!response.ok) throw new Error('Đặt hàng thất bại');
-            alert('Đặt hàng thành công!');
+            toast.success('Đặt hàng thành công!');
             clearCart();
-            window.location.href = '/';
-        } catch (error: any) {
-            alert(error.message);
+            navigate('/');
+        } catch (err) {
+            if (axios.isAxiosError(err) && err.response?.status === 401) {
+                toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+                navigate('/login', { state: { from: location.pathname } });
+            } else {
+                toast.error(axios.isAxiosError(err) ? err.message : 'Đặt hàng thất bại.');
+            }
         } finally {
             setIsSubmitting(false);
         }
-    };
+    }, [
+        userInfo,
+        shippingAddress,
+        paymentMethod,
+        shippingMethod,
+        orderNote,
+        cartItems,
+        totalAmount,
+        token,
+        navigate,
+        location.pathname,
+    ]);
 
-    return (
-        <div className="max-w-6xl mx-auto p-6 grid md:grid-cols-2 gap-8">
-            {/* LEFT - Form checkout */}
-            <div>
-                <h2 className="text-2xl font-bold mb-4">Thông tin thanh toán</h2>
-                <div className="space-y-4">
-                    <div>
-                        <label className="block font-medium mb-1 ">Tên khách hàng</label>
-                        <input
-                            className="w-full border px-3 py-2 rounded pointer-events:none"
-                            value={userName}
-                            disabled
-                        />
+    if (isLoading) {
+        return (
+            <div className="max-w-6xl mx-auto p-4 sm:p-6">
+                <div className="animate-pulse space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-4">
+                            <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+                            {[...Array(5)].map((_, i) => (
+                                <div key={i} className="h-12 bg-gray-200 rounded"></div>
+                            ))}
+                            <div className="h-16 bg-gray-200 rounded w-1/2 ml-auto"></div>
+                            <div className="h-12 bg-gray-200 rounded"></div>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+                            <div className="h-64 bg-gray-200 rounded"></div>
+                        </div>
                     </div>
-                    <div>
-                        <label className="block font-medium mb-1">Địa chỉ giao hàng</label>
-                        <textarea
-                            className="w-full border px-3 py-2 rounded"
-                            value={shippingAddress}
-                            onChange={e => setShippingAddress(e.target.value)}
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block font-medium mb-1">Phương thức thanh toán</label>
-                        <select
-                            className="w-full border px-3 py-2 rounded"
-                            value={paymentMethod}
-                            onChange={e => setPaymentMethod(e.target.value)}
-                        >
-                            <option value="cash">Tiền mặt</option>
-                            <option value="bank">Chuyển khoản</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block font-medium mb-1">Đơn vị vận chuyển</label>
-                        <select
-                            className="w-full border px-3 py-2 rounded"
-                            value={shippingMethod}
-                            onChange={e => setShippingMethod(e.target.value)}
-                        >
-                            <option value="viettelpost">ViettelPost</option>
-                            <option value="giaohangtietkiem">Giao Hàng Tiết Kiệm</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block font-medium mb-1">Ghi chú đơn hàng</label>
-                        <textarea
-                            className="w-full border px-3 py-2 rounded"
-                            value={orderNote}
-                            onChange={e => setOrderNote(e.target.value)}
-                            placeholder="Ghi chú thêm nếu có..."
-                        />
-                    </div>
-
-                    <div className="text-right font-bold mt-6 flex flex-col items-end">
-                        <span className='flex justify-between w-[300px] items-center'>
-                            <span className='text-sm font-normal'>Tạm tính: </span>
-                            <span>{totalAmount.toLocaleString()} VNĐ</span>
-                        </span>
-                        <span className='flex justify-between w-[300px] items-center'>
-                            <span className='text-sm font-normal'>Vận chuyển: </span>
-                            <span>30,000 VNĐ</span>
-                        </span>
-                        <span className='flex justify-between w-[300px] items-center'>
-                            <span className='text-sm font-normal'>Thành tiền: </span>
-                            <span className='text-lg text-red-500'>{(totalAmount + 30000).toLocaleString()} VNĐ</span>
-                        </span>
-                    </div>
-
-                    <button
-                        onClick={handleConfirmOrder}
-                        disabled={isSubmitting}
-                        className="w-full mt-4 bg-[#371A16] text-white py-3 rounded hover:bg-[#4a2420] disabled:bg-gray-400"
-                    >
-                        {isSubmitting ? 'Đang xử lý...' : 'Xác nhận đơn hàng'}
-                    </button>
                 </div>
             </div>
+        );
+    }
 
-            <div>
-                <h2 className="text-2xl font-bold mb-4">Sản phẩm trong giỏ hàng</h2>
-                <div className="space-y-4 max-h-[70vh] overflow-y-auto border p-4 rounded-lg bg-white">
-                    {cartItems.length === 0 ? (
-                        <p>Không có sản phẩm nào.</p>
-                    ) : (
-                        cartItems.map((item: any, index: number) => (
-                            <div
-                                key={index}
-                                className="flex items-center gap-4 border-b pb-3"
+    return (
+        <div className="max-w-6xl mx-auto p-4 sm:p-6 bg-gray-100">
+            <h1 className="text-3xl font-bold text-[#1E3A8A] mb-6">Thanh toán</h1>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Checkout Form */}
+                <div>
+                    <h2 className="text-xl font-bold text-[#1F2937] mb-4">Thông tin thanh toán</h2>
+                    <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleConfirmOrder(); }}>
+                        <div>
+                            <label htmlFor="username" className="block font-medium text-[#1F2937] mb-1">
+                                Tên khách hàng
+                            </label>
+                            <input
+                                id="username"
+                                className="w-full border border-gray-300 px-3 py-2 rounded bg-gray-100 pointer-events-none"
+                                value={userInfo?.username || ''}
+                                disabled
+                                aria-disabled="true"
+                                aria-label="Tên khách hàng (không thể chỉnh sửa)"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="shippingAddress" className="block font-medium text-[#1F2937] mb-1">
+                                Địa chỉ giao hàng
+                            </label>
+                            <textarea
+                                id="shippingAddress"
+                                className={`w-full border ${addressError ? 'border-[#EF4444]' : 'border-gray-300'} px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6]`}
+                                value={shippingAddress}
+                                onChange={(e) => {
+                                    setShippingAddress(e.target.value);
+                                    setAddressError('');
+                                }}
+                                rows={3}
+                                aria-describedby={addressError ? 'address-error' : undefined}
+                                aria-label="Địa chỉ giao hàng"
+                            />
+                            {addressError && (
+                                <p id="address-error" className="text-[#EF4444] text-sm mt-1" role="alert">
+                                    {addressError}
+                                </p>
+                            )}
+                        </div>
+                        <div>
+                            <label htmlFor="paymentMethod" className="block font-medium text-[#1F2937] mb-1">
+                                Phương thức thanh toán
+                            </label>
+                            <select
+                                id="paymentMethod"
+                                className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                                value={paymentMethod}
+                                onChange={(e) => setPaymentMethod(e.target.value)}
+                                aria-label="Phương thức thanh toán"
                             >
-                                <img
-                                    src={`${API_URL}/${item.product.images?.[0] || 'avatar.png'}`}
-                                    alt={item.product.name}
-                                    className="w-16 h-16 object-cover rounded"
-                                />
-                                <div className="flex-1">
-                                    <h4 className="font-semibold">{item.product.name}</h4>
-                                    <p>Số lượng: {item.quantity}</p>
-                                    <p className="text-sm text-gray-600">
-                                        Giá: {item.product.price.toLocaleString()} VNĐ
-                                    </p>
+                                <option value="cash">Tiền mặt</option>
+                                <option value="bank">Chuyển khoản</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="shippingMethod" className="block font-medium text-[#1F2937] mb-1">
+                                Đơn vị vận chuyển
+                            </label>
+                            <select
+                                id="shippingMethod"
+                                className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                                value={shippingMethod}
+                                onChange={(e) => setShippingMethod(e.target.value)}
+                                aria-label="Đơn vị vận chuyển"
+                            >
+                                <option value="viettelpost">ViettelPost</option>
+                                <option value="giaohangtietkiem">Giao Hàng Tiết Kiệm</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="orderNote" className="block font-medium text-[#1F2937] mb-1">
+                                Ghi chú đơn hàng
+                            </label>
+                            <textarea
+                                id="orderNote"
+                                className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                                value={orderNote}
+                                onChange={(e) => setOrderNote(e.target.value)}
+                                placeholder="Ghi chú thêm nếu có..."
+                                rows={3}
+                                aria-label="Ghi chú đơn hàng"
+                            />
+                        </div>
+                        <div className="text-right font-bold mt-6 flex flex-col items-end">
+                            <div className="w-full max-w-xs space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-[#1F2937]">Tạm tính:</span>
+                                    <span className="text-[#1F2937]">{totalAmount.toLocaleString()} VNĐ</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-[#1F2937]">Vận chuyển:</span>
+                                    <span className="text-[#1F2937]">{SHIPPING_COST.toLocaleString()} VNĐ</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-[#1F2937]">Thành tiền:</span>
+                                    <span className="text-lg text-[#EF4444] font-bold">
+                                        {(totalAmount + SHIPPING_COST).toLocaleString()} VNĐ
+                                    </span>
                                 </div>
                             </div>
-                        ))
-                    )}
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={isSubmitting || !!addressError}
+                            className="w-full mt-4 bg-[#3B82F6] text-white py-3 rounded hover:bg-[#2563EB] disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
+                            aria-label="Xác nhận đơn hàng"
+                        >
+                            {isSubmitting ? 'Đang xử lý...' : 'Xác nhận đơn hàng'}
+                        </button>
+                    </form>
+                </div>
+                {/* Cart Items */}
+                <div>
+                    <h2 className="text-xl font-bold text-[#1F2937] mb-4">Sản phẩm trong giỏ hàng</h2>
+                    <div className="max-h-[60vh] overflow-y-auto border border-gray-300 p-4 rounded-lg bg-white">
+                        {cartItems.length === 0 ? (
+                            <p className="text-[#1F2937]">Không có sản phẩm nào.</p>
+                        ) : (
+                            cartItems.map((item: CartItem, index: number) => (
+                                <div key={index} className="flex items-center gap-4 border-b border-gray-200 pb-3 mb-3 last:mb-0 last:border-b-0">
+                                    <img
+                                        src={`${API_URL}/${item.product.images?.[0] || 'avatar.png'}`}
+                                        alt={`${item.product.name} (${item.product.categoryName || 'Product'})`}
+                                        className="w-16 h-16 object-contain rounded"
+                                        onError={(e) => { e.currentTarget.src = '/avatar.png'; }}
+                                    />
+                                    <div className="flex-1">
+                                        <h4 className="font-semibold text-[#1F2937] text-sm line-clamp-2">{item.product.name}</h4>
+                                        <p className="text-sm text-gray-600">Số lượng: {item.quantity}</p>
+                                        <p className="text-sm text-gray-600">
+                                            Giá: {(item.product.price * item.quantity).toLocaleString()} VNĐ
+                                        </p>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

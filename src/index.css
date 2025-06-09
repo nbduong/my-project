@@ -2,9 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
+/* body {
     background-color: #ffeede;
-}
+} */
 
 .container {
     max-width: 1200px;
@@ -24,4 +24,60 @@ body {
 
 .animate-slideDown {
     animation: slideDown 0.2s ease-out;
+}
+
+/* Floating label effect for username */
+#username:focus+.username-label,
+#username:not(:placeholder-shown)+.username-label {
+    top: -20px;
+    font-size: 0.75rem;
+    color: #371A16;
+}
+
+/* Floating label effect for password */
+#password:focus+.password-label,
+#password:not(:placeholder-shown)+.password-label {
+    top: -20px;
+    font-size: 0.75rem;
+    color: #371A16;
+}
+
+/* Floating label effect for username */
+#username:focus+.username-label,
+#username:not(:placeholder-shown)+.username-label {
+    top: -20px;
+    font-size: 0.75rem;
+    color: #371A16;
+}
+
+/* Floating label effect for password */
+#password:focus+.password-label,
+#password:not(:placeholder-shown)+.password-label {
+    top: -20px;
+    font-size: 0.75rem;
+    color: #371A16;
+}
+
+/* Floating label effect for confirmPassword */
+#confirmPassword:focus+.confirmPassword-label,
+#confirmPassword:not(:placeholder-shown)+.confirmPassword-label {
+    top: -20px;
+    font-size: 0.75rem;
+    color: #371A16;
+}
+
+/* Floating label effect for email */
+#email:focus+.email-label,
+#email:not(:placeholder-shown)+.email-label {
+    top: -20px;
+    font-size: 0.75rem;
+    color: #371A16;
+}
+
+/* Floating label effect for name */
+#name:focus+.name-label,
+#name:not(:placeholder-shown)+.name-label {
+    top: -20px;
+    font-size: 0.75rem;
+    color: #371A16;
 }

@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from 'react-toastify';
 import { getToken } from "../../services/localStorageService";
 
 // Interface cho danh mục và thương hiệu
@@ -39,7 +40,7 @@ interface ProductFormData {
     brandId: number;
     categoryId: number;
     specificationsJson: { [key: string]: string };
-    isDeleted: boolean; // Thêm isDeleted vào ProductFormData
+    isDeleted: boolean;
 }
 
 interface ProductFormProps {
@@ -64,39 +65,77 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
     const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(
         categories.find((category) => category.name === product.categoryName)?.id
     );
+    const [error, setError] = useState<string | null>(null);
 
-    const handleInputChange = (field: keyof Product, value: string | number | boolean) => {
+    const validateForm = useCallback(() => {
+        if (!formData.name || formData.name.trim().length < 2) {
+            setError("Tên sản phẩm phải có ít nhất 2 ký tự");
+            return false;
+        }
+        if (!formData.productCode || formData.productCode.trim().length < 3) {
+            setError("Mã sản phẩm phải có ít nhất 3 ký tự");
+            return false;
+        }
+        if (formData.price <= 0) {
+            setError("Giá sản phẩm phải lớn hơn 0");
+            return false;
+        }
+        if (formData.quantity < 0) {
+            setError("Số lượng sản phẩm không được âm");
+            return false;
+        }
+        if (!selectedBrandId) {
+            setError("Vui lòng chọn thương hiệu");
+            return false;
+        }
+        if (!selectedCategoryId) {
+            setError("Vui lòng chọn danh mục");
+            return false;
+        }
+        if (formData.description && formData.description.length > 1000) {
+            setError("Mô tả không được vượt quá 1000 ký tự");
+            return false;
+        }
+        if (specFields.some((spec) => spec.key && !spec.value)) {
+            setError("Vui lòng nhập giá trị cho tất cả thông số kỹ thuật");
+            return false;
+        }
+        return true;
+    }, [formData, selectedBrandId, selectedCategoryId, specFields]);
+
+    const handleInputChange = useCallback((field: keyof Product, value: string | number | boolean) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
-    };
+        setError(null);
+    }, []);
 
-    const handleSpecChange = (index: number, field: "key" | "value", value: string) => {
+    const handleSpecChange = useCallback((index: number, field: "key" | "value", value: string) => {
         setSpecFields((prev) => {
             const newFields = [...prev];
             newFields[index] = { ...newFields[index], [field]: value };
             return newFields;
         });
-    };
+        setError(null);
+    }, []);
 
-    const addSpecField = () => {
+    const addSpecField = useCallback(() => {
         setSpecFields((prev) => [...prev, { key: "", value: "" }]);
-    };
+    }, []);
 
-    const removeSpecField = (index: number) => {
+    const removeSpecField = useCallback((index: number) => {
         setSpecFields((prev) => prev.filter((_, i) => i !== index));
-    };
+        setError(null);
+    }, []);
 
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             setSelectedImages(Array.from(e.target.files));
+            setError(null);
         }
-    };
+    }, []);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedBrandId || !selectedCategoryId) {
-            alert("Vui lòng chọn thương hiệu và danh mục!");
-            return;
-        }
+        if (!validateForm()) return;
         setIsSubmitting(true);
         try {
             const specificationsJson: { [key: string]: string } = {};
@@ -111,32 +150,44 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
                 description: formData.description,
                 price: formData.price,
                 quantity: formData.quantity,
-                brandId: selectedBrandId,
-                categoryId: selectedCategoryId,
+                brandId: selectedBrandId!,
+                categoryId: selectedCategoryId!,
                 specificationsJson,
-                isDeleted: formData.isDeleted, // Thêm isDeleted vào dữ liệu gửi
+                isDeleted: formData.isDeleted,
             };
             await onSubmit(updatedFormData, selectedImages);
         } finally {
             setIsSubmitting(false);
         }
-    };
+    }, [formData, selectedBrandId, selectedCategoryId, specFields, selectedImages, onSubmit, validateForm]);
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 overflow-y-auto">
-            <div className="bg-white p-6 rounded w-full max-w-lg sm:max-w-md md:max-w-lg">
-                <h2 className="text-xl font-bold mb-4">{title}</h2>
-                <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 overflow-y-auto z-50">
+            <div className="bg-white p-6 rounded-lg w-full max-w-md sm:max-w-lg shadow-xl">
+                <h2 className="text-xl font-bold text-[#1A202C] mb-4">{title}</h2>
+                {error && (
+                    <div className="bg-red-100 text-[#E53E3E] p-2 rounded mb-4 text-sm">
+                        {error}
+                    </div>
+                )}
+                <form onSubmit={handleSubmit} className="space-y-4">
                     {[
-                        { label: "Mã sản phẩm", name: "productCode", type: "text" },
-                        { label: "Tên sản phẩm", name: "name", type: "text" },
-                        { label: "Giá", name: "price", type: "number" },
-                        { label: "Số lượng", name: "quantity", type: "number" },
+                        { label: "Mã sản phẩm", name: "productCode", type: "text", required: true },
+                        { label: "Tên sản phẩm", name: "name", type: "text", required: true },
+                        { label: "Giá", name: "price", type: "number", required: true },
+                        { label: "Số lượng", name: "quantity", type: "number", required: true },
                     ].map((field) => (
                         <div key={field.name}>
-                            <label className="block text-sm font-medium">{field.label}</label>
+                            <label
+                                htmlFor={field.name}
+                                className={`block text-sm font-medium text-[#1A202C] transition-all duration-300 ${formData[field.name as keyof Product] ? "text-[#2C5282] font-semibold" : ""
+                                    }`}
+                            >
+                                {field.label} {field.required && <span className="text-[#E53E3E]">*</span>}
+                            </label>
                             <input
                                 type={field.type}
+                                id={field.name}
                                 value={(formData[field.name as keyof Product] as string | number) || ""}
                                 onChange={(e) =>
                                     handleInputChange(
@@ -144,22 +195,37 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
                                         field.type === "number" ? Number(e.target.value) : e.target.value
                                     )
                                 }
-                                className="w-full border px-3 py-2 rounded"
+                                className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
+                                required={field.required}
                             />
                         </div>
                     ))}
                     <div>
-                        <label className="block text-sm font-medium">Mô tả</label>
+                        <label
+                            htmlFor="description"
+                            className={`block text-sm font-medium text-[#1A202C] transition-all duration-300 ${formData.description ? "text-[#2C5282] font-semibold" : ""
+                                }`}
+                        >
+                            Mô tả
+                        </label>
                         <textarea
+                            id="description"
                             value={formData.description || ""}
                             onChange={(e) => handleInputChange("description", e.target.value)}
-                            className="w-full border px-3 py-2 rounded h-32 resize-y"
+                            className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200 h-32 resize-y"
                             placeholder="Nhập mô tả sản phẩm..."
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium">Chọn danh mục</label>
+                        <label
+                            htmlFor="categoryId"
+                            className={`block text-sm font-medium text-[#1A202C] transition-all duration-300 ${selectedCategoryId ? "text-[#2C5282] font-semibold" : ""
+                                }`}
+                        >
+                            Chọn danh mục <span className="text-[#E53E3E]">*</span>
+                        </label>
                         <select
+                            id="categoryId"
                             value={selectedCategoryId || ""}
                             onChange={(e) => {
                                 const categoryId = Number(e.target.value);
@@ -167,7 +233,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
                                 const category = categories.find((cat) => cat.id === categoryId);
                                 handleInputChange("categoryName", category?.name || "");
                             }}
-                            className="w-full border px-3 py-2 rounded"
+                            className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
+                            required
                         >
                             <option value="">-- Chọn danh mục --</option>
                             {categories.map((category) => (
@@ -178,8 +245,15 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium">Chọn thương hiệu</label>
+                        <label
+                            htmlFor="brandId"
+                            className={`block text-sm font-medium text-[#1A202C] transition-all duration-300 ${selectedBrandId ? "text-[#2C5282] font-semibold" : ""
+                                }`}
+                        >
+                            Chọn thương hiệu <span className="text-[#E53E3E]">*</span>
+                        </label>
                         <select
+                            id="brandId"
                             value={selectedBrandId || ""}
                             onChange={(e) => {
                                 const brandId = Number(e.target.value);
@@ -187,7 +261,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
                                 const brand = brands.find((b) => b.id === brandId);
                                 handleInputChange("brandName", brand?.name || "");
                             }}
-                            className="w-full border px-3 py-2 rounded"
+                            className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
+                            required
                         >
                             <option value="">-- Chọn thương hiệu --</option>
                             {brands.map((brand) => (
@@ -198,19 +273,19 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium mb-2">Trạng thái</label>
+                        <label className="block text-sm font-medium text-[#1A202C] mb-2">Trạng thái</label>
                         <label className="inline-flex items-center">
                             <input
                                 type="checkbox"
                                 checked={formData.isDeleted}
                                 onChange={(e) => handleInputChange("isDeleted", e.target.checked)}
-                                className="form-checkbox h-5 w-5 text-blue-600"
+                                className="form-checkbox h-5 w-5 text-[#3182CE] focus:ring-[#3182CE]"
                             />
-                            <span className="ml-2 text-sm">Đã xóa</span>
+                            <span className="ml-2 text-sm text-[#1A202C]">Đã xóa</span>
                         </label>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium mb-2">Thông số kỹ thuật</label>
+                        <label className="block text-sm font-medium text-[#1A202C] mb-2">Thông số kỹ thuật</label>
                         {specFields.map((spec, index) => (
                             <div key={index} className="flex space-x-2 mb-2 items-center">
                                 <input
@@ -218,19 +293,19 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
                                     placeholder="Tên thông số (key)"
                                     value={spec.key}
                                     onChange={(e) => handleSpecChange(index, "key", e.target.value)}
-                                    className="w-1/2 border px-3 py-2 rounded"
+                                    className="w-1/2 mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
                                 />
                                 <input
                                     type="text"
                                     placeholder="Giá trị (value)"
                                     value={spec.value}
                                     onChange={(e) => handleSpecChange(index, "value", e.target.value)}
-                                    className="w-1/2 border px-3 py-2 rounded"
+                                    className="w-1/2 mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => removeSpecField(index)}
-                                    className="text-red-500 hover:text-red-700"
+                                    className="text-[#E53E3E] hover:text-red-700 transition-colors duration-200"
                                 >
                                     <svg
                                         xmlns="http://www.w3.org/2000/svg"
@@ -252,21 +327,21 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
                         <button
                             type="button"
                             onClick={addSpecField}
-                            className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 mt-2"
+                            className="bg-[#2C5282] text-white px-3 py-1 rounded-md hover:bg-[#3182CE] transition-all duration-200 mt-2"
                         >
                             + Thêm thông số
                         </button>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium">Chọn ảnh</label>
+                        <label className="block text-sm font-medium text-[#1A202C]">Chọn ảnh</label>
                         <input
                             type="file"
                             multiple
                             onChange={handleImageChange}
-                            className="w-full border px-3 py-2 rounded"
+                            className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
                         />
                         {selectedImages.length > 0 && (
-                            <p className="text-sm text-gray-600 mt-1">
+                            <p className="text-sm text-[#1A202C] mt-1">
                                 Đã chọn {selectedImages.length} ảnh
                             </p>
                         )}
@@ -275,14 +350,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, categories, brands, 
                         <button
                             type="button"
                             onClick={onCancel}
-                            className="bg-gray-400 text-white px-4 py-2 rounded"
+                            className="bg-gray-300 text-[#1A202C] px-4 py-2 rounded-md hover:bg-gray-400 transition-all duration-200"
                         >
                             Hủy
                         </button>
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className={`bg-blue-600 text-white px-4 py-2 rounded ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
+                            className={`bg-[#2C5282] text-white px-4 py-2 rounded-md hover:bg-[#3182CE] transition-all duration-200 ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
                         >
                             Lưu
                         </button>
@@ -299,32 +374,36 @@ const ViewProductModal: React.FC<{ product: Product; onClose: () => void }> = ({
         : 'http://localhost:8080/datn';
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 overflow-y-auto">
-            <div className="bg-white p-6 rounded w-full max-w-lg sm:max-w-md md:max-w-lg">
-                <h2 className="text-xl font-bold mb-4">Xem chi tiết sản phẩm</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 overflow-y-auto z-50">
+            <div className="bg-white p-6 rounded-lg w-full max-w-md sm:max-w-lg shadow-xl">
+                <h2 className="text-xl font-bold text-[#1A202C] mb-4">Xem chi tiết sản phẩm</h2>
                 <div className="space-y-4">
+                    {[
+                        { label: "Mã sản phẩm", value: product.productCode },
+                        { label: "Tên sản phẩm", value: product.name },
+                        { label: "Thương hiệu", value: product.brandName },
+                        { label: "Danh mục", value: product.categoryName || "Không có danh mục" },
+                        { label: "Giá", value: `${product.price.toLocaleString()} VNĐ` },
+                        { label: "Số lượng", value: product.quantity.toLocaleString() },
+                        { label: "Trạng thái", value: product.isDeleted ? "Đã xóa" : "Hoạt động" },
+                    ].map(({ label, value }) => (
+                        <div key={label}>
+                            <label className="block text-sm font-medium text-[#2C5282]">{label}</label>
+                            <p className="mt-1 px-3 py-2 text-sm rounded-md border border-gray-300 bg-gray-50 text-[#1A202C]">
+                                {value}
+                            </p>
+                        </div>
+                    ))}
                     <div>
-                        <label className="block text-sm font-medium">Mã sản phẩm</label>
-                        <p className="border px-3 py-2 rounded">{product.productCode}</p>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Tên sản phẩm</label>
-                        <p className="border px-3 py-2 rounded">{product.name}</p>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Thương hiệu</label>
-                        <p className="border px-3 py-2 rounded">{product.brandName}</p>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Mô tả</label>
-                        <p className="border px-3 py-2 rounded h-32 overflow-y-auto">
+                        <label className="block text-sm font-medium text-[#2C5282]">Mô tả</label>
+                        <p className="mt-1 px-3 py-2 text-sm rounded-md border border-gray-300 bg-gray-50 text-[#1A202C] h-32 overflow-y-auto">
                             {product.description || "Không có mô tả"}
                         </p>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium">Ảnh</label>
+                        <label className="block text-sm font-medium text-[#2C5282]">Ảnh</label>
                         {product.images.length > 0 ? (
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-3 gap-4 mt-1">
                                 {product.images.map((image, index) => (
                                     <img
                                         key={index}
@@ -338,41 +417,27 @@ const ViewProductModal: React.FC<{ product: Product; onClose: () => void }> = ({
                                 ))}
                             </div>
                         ) : (
-                            <p className="text-gray-400">Không có ảnh</p>
+                            <p className="text-[#1A202C] mt-1">Không có ảnh</p>
                         )}
                     </div>
                     <div>
-                        <label className="block text-sm font-medium">Giá</label>
-                        <p className="border px-3 py-2 rounded">{product.price.toLocaleString()} VNĐ</p>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Số lượng</label>
-                        <p className="border px-3 py-2 rounded">{product.quantity.toLocaleString()}</p>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Danh mục</label>
-                        <p className="border px-3 py-2 rounded">{product.categoryName || "Không có danh mục"}</p>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Trạng thái</label>
-                        <p className="border px-3 py-2 rounded">
-                            {product.isDeleted ? "Đã xóa" : "Hoạt động"}
-                        </p>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium">Thông số kỹ thuật</label>
-                        <div className="border px-3 py-2 rounded">
-                            {Object.entries(product.specifications).map(([key, value]) => (
-                                <p key={key} className="text-sm">
-                                    <span className="font-medium">{key}:</span> {value}
-                                </p>
-                            ))}
+                        <label className="block text-sm font-medium text-[#2C5282]">Thông số kỹ thuật</label>
+                        <div className="mt-1 px-3 py-2 rounded-md border border-gray-300 bg-gray-50">
+                            {Object.entries(product.specifications).length > 0 ? (
+                                Object.entries(product.specifications).map(([key, value]) => (
+                                    <p key={key} className="text-sm text-[#1A202C]">
+                                        <span className="font-medium">{key}:</span> {value}
+                                    </p>
+                                ))
+                            ) : (
+                                <p className="text-[#1A202C]">Không có thông số</p>
+                            )}
                         </div>
                     </div>
                     <div className="flex justify-end">
                         <button
                             onClick={onClose}
-                            className="bg-gray-400 text-white px-4 py-2 rounded"
+                            className="bg-gray-300 text-[#1A202C] px-4 py-2 rounded-md hover:bg-gray-400 transition-all duration-200"
                         >
                             Đóng
                         </button>
@@ -385,23 +450,26 @@ const ViewProductModal: React.FC<{ product: Product; onClose: () => void }> = ({
 
 export const ManageProduct: React.FC = () => {
     const navigate = useNavigate();
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isAdmin, setIsAdmin] = useState<boolean>(false);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [brands, setBrands] = useState<Brand[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+    const [isViewModalOpen, setIsViewModalOpen] = useState<boolean>(false);
     const [sortField, setSortField] = useState<keyof Product | "">("");
-    const [searchTerm, setSearchTerm] = useState("");
+    const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+    const [searchTerm, setSearchTerm] = useState<string>("");
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const [itemsPerPage] = useState<number>(10);
     const API_URL = typeof process !== 'undefined' && process.env.REACT_APP_API_URL
         ? process.env.REACT_APP_API_URL
         : 'http://localhost:8080/datn';
 
-    const checkAdmin = async (accessToken: string) => {
+    const checkAdmin = useCallback(async (accessToken: string) => {
         try {
             const response = await fetch(`${API_URL}/users/myInfo`, {
                 method: "GET",
@@ -413,16 +481,18 @@ export const ManageProduct: React.FC = () => {
             }
             if (!response.ok) throw new Error("Không thể kiểm tra quyền admin");
             const data = await response.json();
-            if (data.result.roles?.some((role: { name: string }) => role.name === "ADMIN")) {
+            if (data.result?.roles?.some((role: { name: string }) => role.name === "ADMIN")) {
                 setIsAdmin(true);
+            } else {
+                throw new Error("Không có quyền admin");
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error checking admin status:", err);
-            setError("Có lỗi xảy ra khi kiểm tra quyền admin");
+            setError(err.message || "Có lỗi xảy ra khi kiểm tra quyền admin");
         }
-    };
+    }, [navigate]);
 
-    const getAllCategories = async (accessToken: string) => {
+    const getAllCategories = useCallback(async (accessToken: string) => {
         try {
             const response = await fetch(`${API_URL}/category`, {
                 method: "GET",
@@ -432,13 +502,13 @@ export const ManageProduct: React.FC = () => {
             const data = await response.json();
             const categoriesData = Array.isArray(data.result) ? data.result : data.result?.data || [];
             setCategories(categoriesData);
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error fetching categories:", err);
-            setError("Có lỗi xảy ra khi tải danh sách danh mục");
+            setError(err.message || "Có lỗi xảy ra khi tải danh sách danh mục");
         }
-    };
+    }, []);
 
-    const getAllBrands = async (accessToken: string) => {
+    const getAllBrands = useCallback(async (accessToken: string) => {
         try {
             const response = await fetch(`${API_URL}/brand`, {
                 method: "GET",
@@ -448,13 +518,13 @@ export const ManageProduct: React.FC = () => {
             const data = await response.json();
             const brandData = Array.isArray(data.result) ? data.result : data.result?.data || [];
             setBrands(brandData);
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error fetching brands:", err);
-            setError("Có lỗi xảy ra khi tải danh sách thương hiệu");
+            setError(err.message || "Có lỗi xảy ra khi tải danh sách thương hiệu");
         }
-    };
+    }, []);
 
-    const getAllProducts = async (accessToken: string) => {
+    const getAllProducts = useCallback(async (accessToken: string) => {
         try {
             const response = await fetch(`${API_URL}/products`, {
                 method: "GET",
@@ -469,26 +539,25 @@ export const ManageProduct: React.FC = () => {
             const productsData = Array.isArray(data.result) ? data.result : data.result?.data || [];
             if (!Array.isArray(productsData)) throw new Error("Dữ liệu sản phẩm không hợp lệ");
             setProducts(productsData);
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error fetching products:", err);
-            setError("Có lỗi xảy ra khi thếm sản phẩm");
+            setError(err.message || "Có lỗi xảy ra khi tải danh sách sản phẩm");
         }
-    };
+    }, [navigate]);
 
-    const handleEditProduct = (product: Product) => {
+    const handleEditProduct = useCallback((product: Product) => {
         setSelectedProduct(product);
         setIsEditModalOpen(true);
-    };
+    }, []);
 
-    const handleDeleteProduct = async (productId: string) => {
+    const handleDeleteProduct = useCallback(async (productId: string) => {
         if (!window.confirm("Bạn có chắc muốn xóa sản phẩm này?")) return;
         try {
             const accessToken = getToken();
+            if (!accessToken) throw new Error("Không tìm thấy token");
             const response = await fetch(`${API_URL}/products/${productId}`, {
                 method: "DELETE",
-                headers: {
-                    Authorization: `Bearer ${accessToken}`
-                },
+                headers: { Authorization: `Bearer ${accessToken}` },
             });
             if (response.status === 401) {
                 navigate("/login");
@@ -496,17 +565,18 @@ export const ManageProduct: React.FC = () => {
             }
             if (!response.ok) {
                 const errData = await response.json();
-                throw new Error(errData.message || "Không thể cập nhật trạng thái sản phẩm");
+                throw new Error(errData.message || "Không thể xóa sản phẩm");
             }
-            alert("Xóa sản phẩm thành công!");
-            window.location.reload();
-        } catch (err) {
-            console.error("Error updating product status:", err);
-            setError("Có lỗi xảy ra khi cập nhật trạng thái sản phẩm");
+            setProducts((prev) => prev.filter((p) => p.id !== productId));
+            setSearchTerm("");
+            toast.success("Xóa sản phẩm thành công!");
+        } catch (err: any) {
+            console.error("Error deleting product:", err);
+            toast.error(err.message || "Có lỗi xảy ra khi xóa sản phẩm");
         }
-    };
+    }, [navigate]);
 
-    const handleCreateProduct = () => {
+    const handleCreateProduct = useCallback(() => {
         const newProduct: Product = {
             id: "",
             name: "",
@@ -522,11 +592,12 @@ export const ManageProduct: React.FC = () => {
         };
         setSelectedProduct(newProduct);
         setIsCreateModalOpen(true);
-    };
+    }, []);
 
-    const handleCreateProductSubmit = async (formData: ProductFormData, images: File[]) => {
+    const handleCreateProductSubmit = useCallback(async (formData: ProductFormData, images: File[]) => {
         try {
             const accessToken = getToken();
+            if (!accessToken) throw new Error("Không tìm thấy token");
             const formDataToSend = new FormData();
             formDataToSend.append("name", formData.name || "");
             formDataToSend.append("productCode", formData.productCode || "");
@@ -556,19 +627,20 @@ export const ManageProduct: React.FC = () => {
             }
             const newProduct = await response.json();
             setProducts((prev) => [...prev, newProduct.result || newProduct]);
-            alert("Tạo sản phẩm thành công!");
             setIsCreateModalOpen(false);
             setSelectedProduct(null);
-            window.location.reload();
+            toast.success("Tạo sản phẩm thành công!");
         } catch (err: any) {
-            setError(err.message || "Có lỗi xảy ra khi tạo sản phẩm");
-            console.error("Error details:", err);
+            console.error("Error creating product:", err);
+            toast.error(err.message || "Có lỗi xảy ra khi tạo sản phẩm");
         }
-    };
+    }, [navigate]);
 
-    const handleUpdateProduct = async (formData: ProductFormData, images: File[]) => {
+    const handleUpdateProduct = useCallback(async (formData: ProductFormData, images: File[]) => {
+        if (!selectedProduct) return;
         try {
             const accessToken = getToken();
+            if (!accessToken) throw new Error("Không tìm thấy token");
             const formDataToSend = new FormData();
             formDataToSend.append("name", formData.name || "");
             formDataToSend.append("productCode", formData.productCode || "");
@@ -582,7 +654,7 @@ export const ManageProduct: React.FC = () => {
             formDataToSend.append("isDeleted", formData.isDeleted.toString());
             images.forEach((image) => formDataToSend.append("images", image));
 
-            const response = await fetch(`${API_URL}/products/${selectedProduct?.id}`, {
+            const response = await fetch(`${API_URL}/products/${selectedProduct.id}`, {
                 method: "PUT",
                 headers: { Authorization: `Bearer ${accessToken}` },
                 body: formDataToSend,
@@ -597,22 +669,21 @@ export const ManageProduct: React.FC = () => {
             }
             const updatedProduct = await response.json();
             setProducts((prev) =>
-                prev.map((p) => (p.id === updatedProduct.id ? updatedProduct.result || updatedProduct : p))
+                prev.map((p) => (p.id === updatedProduct.result?.id ? updatedProduct.result : p))
             );
-            alert("Cập nhật sản phẩm thành công!");
             setIsEditModalOpen(false);
             setSelectedProduct(null);
-            window.location.reload();
+            toast.success("Cập nhật sản phẩm thành công!");
         } catch (err: any) {
-            setError(err.message || "Có lỗi xảy ra khi cập nhật sản phẩm");
-            console.error("Error details:", err);
+            console.error("Error updating product:", err);
+            toast.error(err.message || "Có lỗi xảy ra khi cập nhật sản phẩm");
         }
-    };
+    }, [selectedProduct, navigate]);
 
-    const handleViewProduct = (product: Product) => {
+    const handleViewProduct = useCallback((product: Product) => {
         setSelectedProduct(product);
         setIsViewModalOpen(true);
-    };
+    }, []);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -630,22 +701,13 @@ export const ManageProduct: React.FC = () => {
             setIsLoading(false);
         };
         fetchData();
-    }, [navigate]);
+    }, [navigate, checkAdmin, getAllProducts, getAllCategories, getAllBrands]);
 
     useEffect(() => {
         if (!isLoading && !isAdmin) navigate("/");
     }, [isLoading, isAdmin, navigate]);
 
-    useEffect(() => {
-        if (error) {
-            const timer = setTimeout(() => setError(null), 5000);
-            return () => clearTimeout(timer);
-        }
-    }, [error]);
-
-    if (isLoading) return <p className="text-center">Đang tải...</p>;
-    if (error) return <p className="text-center text-red-500">{error}</p>;
-
+    // Pagination logic
     const filteredProducts = products.filter(
         (product) =>
             product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -658,24 +720,78 @@ export const ManageProduct: React.FC = () => {
     const sortedProducts = [...filteredProducts].sort((a, b) => {
         if (!sortField) return 0;
         if (sortField === "price" || sortField === "quantity") {
-            return (a[sortField] as number) - (b[sortField] as number);
+            return sortDirection === "asc"
+                ? (a[sortField] as number) - (b[sortField] as number)
+                : (b[sortField] as number) - (a[sortField] as number);
         }
         if (sortField === "isDeleted") {
-            return Number(a.isDeleted) - Number(b.isDeleted);
+            return sortDirection === "asc"
+                ? Number(a.isDeleted) - Number(b.isDeleted)
+                : Number(b.isDeleted) - Number(a.isDeleted);
         }
         const aValue = a[sortField] || "";
         const bValue = b[sortField] || "";
-        return aValue.toString().localeCompare(bValue.toString());
+        return sortDirection === "asc"
+            ? aValue.toString().localeCompare(bValue.toString())
+            : bValue.toString().localeCompare(aValue.toString());
     });
 
+    const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
+    const paginatedProducts = sortedProducts.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    const handlePageChange = useCallback((page: number) => {
+        setCurrentPage(page);
+    }, []);
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-[#EDF2F7]">
+                <div className="flex flex-col items-center">
+                    <svg
+                        className="animate-spin h-8 w-8 text-[#2C5282]"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                    >
+                        <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                        ></circle>
+                        <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                    </svg>
+                    <span className="mt-2 text-[#1A202C]">Đang tải...</span>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="text-center p-6 text-[#E53E3E] bg-red-100 rounded-lg">
+                {error}
+            </div>
+        );
+    }
+
     return (
-        <div className="container mx-auto p-4">
-            <h1 className="text-2xl font-bold mb-4">Quản lý sản phẩm</h1>
-            <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center space-x-4">
+        <div className="p-4 sm:p-6 bg-[#EDF2F7]">
+            <h1 className="text-2xl font-bold text-[#1A202C] mb-4">Quản lý sản phẩm</h1>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-4 sm:space-y-0">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
                     <button
                         onClick={handleCreateProduct}
-                        className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                        className="bg-[#2C5282] text-white px-4 py-2 rounded-md hover:bg-[#3182CE] transition-all duration-200"
                     >
                         + Tạo sản phẩm mới
                     </button>
@@ -684,65 +800,85 @@ export const ManageProduct: React.FC = () => {
                         placeholder="Tìm kiếm sản phẩm..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="border px-3 py-2 rounded w-64"
+                        className="border border-gray-300 px-3 py-2 rounded-md w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
                     />
                 </div>
                 <select
                     value={sortField}
-                    onChange={(e) => setSortField(e.target.value as keyof Product)}
-                    className="border px-3 py-2 rounded"
+                    onChange={(e) => {
+                        setSortField(e.target.value as keyof Product);
+                        setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+                    }}
+                    className="border border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200 w-full sm:w-auto"
                 >
                     <option value="">-- Sắp xếp theo --</option>
-                    <option value="productCode">Mã sản phẩm</option>
-                    <option value="name">Tên sản phẩm</option>
-                    <option value="price">Giá</option>
-                    <option value="quantity">Số lượng</option>
-                    <option value="categoryName">Danh mục</option>
-                    <option value="isDeleted">Trạng thái</option>
+                    <option value="productCode">Mã sản phẩm {sortDirection === "asc" ? "↑" : "↓"}</option>
+                    <option value="name">Tên sản phẩm {sortDirection === "asc" ? "↑" : "↓"}</option>
+                    <option value="price">Giá {sortDirection === "asc" ? "↑" : "↓"}</option>
+                    <option value="quantity">Số lượng {sortDirection === "asc" ? "↑" : "↓"}</option>
+                    <option value="categoryName">Danh mục {sortDirection === "asc" ? "↑" : "↓"}</option>
+                    <option value="isDeleted">Trạng thái {sortDirection === "asc" ? "↑" : "↓"}</option>
                 </select>
             </div>
-            <div className="overflow-x-auto">
-                <table className="min-w-full border border-gray-300 rounded-lg shadow-sm">
+            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
+                <table className="min-w-full border border-gray-200">
                     <thead>
-                        <tr className="bg-[#371A16] text-white text-sm uppercase tracking-wider">
-                            <th className="py-3 px-4 border-b border-gray-200 text-center hidden sm:table-cell">Số thứ tự</th>
+                        <tr className="bg-[#2C5282] text-white text-sm uppercase tracking-wider">
+                            <th className="py-3 px-4 border-b border-gray-200 text-center w-16 sm:w-20">STT</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center">Mã sản phẩm</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center">Tên sản phẩm</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center hidden md:table-cell">Trạng thái</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center hidden md:table-cell">Số lượng</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center hidden md:table-cell">Giá</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center hidden lg:table-cell">Danh mục</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-center w-32">Hành động</th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center w-24 sm:w-32">Hành động</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {sortedProducts.length > 0 ? (
-                            sortedProducts.map((product, index) => (
+                        {isLoading ? (
+                            Array.from({ length: itemsPerPage }).map((_, index) => (
+                                <tr key={index}>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4 hidden md:table-cell"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4 hidden md:table-cell"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4 hidden md:table-cell"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4 hidden lg:table-cell"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                </tr>
+                            ))
+                        ) : paginatedProducts.length > 0 ? (
+                            paginatedProducts.map((product, index) => (
                                 <tr
                                     key={product.id}
-                                    className={`border-b border-gray-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition-colors duration-200`}
+                                    className={`border-b border-gray-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                                        } hover:bg-[#EDF2F7] transition-colors duration-200`}
                                 >
-                                    <td className="py-3 px-4 text-center text-gray-700 hidden sm:table-cell">{index+1}</td>
-                                    <td className="py-3 px-4 text-gray-700 text-center">{product.productCode}</td>
-                                    <td className="py-3 px-4 text-gray-700 text-center">{product.name}</td>
-                                    <td className="py-3 px-4 text-gray-700 text-center hidden md:table-cell">
+                                    <td className="py-3 px-4 text-center text-[#1A202C]">
+                                        {(currentPage - 1) * itemsPerPage + index + 1}
+                                    </td>
+                                    <td className="py-3 px-4 text-[#1A202C] text-center truncate">{product.productCode}</td>
+                                    <td className="py-3 px-4 text-[#1A202C] text-center truncate">{product.name}</td>
+                                    <td className="py-3 px-4 text-center hidden md:table-cell">
                                         <span
-                                            className={`inline-block w-3 h-3 rounded-full ${product.isDeleted ? "bg-red-500" : "bg-green-500"}`}
+                                            className={`inline-block w-3 h-3 rounded-full ${product.isDeleted ? "bg-[#E53E3E]" : "bg-[#38A169]"}`}
                                         ></span>
                                     </td>
-                                    <td className="py-3 px-4 text-gray-700 text-center hidden md:table-cell">
+                                    <td className="py-3 px-4 text-[#1A202C] text-center hidden md:table-cell">
                                         {product.quantity.toLocaleString()}
                                     </td>
-                                    <td className="py-3 px-4 text-gray-700 text-center hidden md:table-cell">
+                                    <td className="py-3 px-4 text-[#1A202C] text-center hidden md:table-cell">
                                         {product.price.toLocaleString()} VNĐ
                                     </td>
-                                    <td className="py-3 px-4 text-gray-700 text-center hidden lg:table-cell">
+                                    <td className="py-3 px-4 text-[#1A202C] text-center hidden lg:table-cell truncate">
                                         {product.categoryName || "Không có danh mục"}
                                     </td>
                                     <td className="py-3 px-4 text-center">
                                         <button
                                             onClick={() => handleViewProduct(product)}
-                                            className="text-green-500 hover:text-green-700 transition-colors duration-200 mr-2"
+                                            className="text-[#38A169] hover:text-[#2F855A] transition-colors duration-200 mr-2 sm:mr-4"
+                                            title="Xem chi tiết"
                                         >
                                             <svg
                                                 xmlns="http://www.w3.org/2000/svg"
@@ -766,7 +902,8 @@ export const ManageProduct: React.FC = () => {
                                         </button>
                                         <button
                                             onClick={() => handleEditProduct(product)}
-                                            className="text-blue-500 hover:text-blue-700 transition-colors duration-200 mr-2"
+                                            className="text-[#3182CE] hover:text-[#2C5282] transition-colors duration-200 mr-2 sm:mr-4"
+                                            title="Chỉnh sửa"
                                         >
                                             <svg
                                                 xmlns="http://www.w3.org/2000/svg"
@@ -785,7 +922,8 @@ export const ManageProduct: React.FC = () => {
                                         </button>
                                         <button
                                             onClick={() => handleDeleteProduct(product.id)}
-                                            className="text-red-500 hover:text-red-700 transition-colors duration-200"
+                                            className="text-[#E53E3E] hover:text-red-700 transition-colors duration-200"
+                                            title="Xóa"
                                         >
                                             <svg
                                                 xmlns="http://www.w3.org/2000/svg"
@@ -807,7 +945,7 @@ export const ManageProduct: React.FC = () => {
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={7} className="py-3 px-4 text-center text-gray-500">
+                                <td colSpan={8} className="py-3 px-4 text-center text-[#1A202C]">
                                     Không có sản phẩm
                                 </td>
                             </tr>
@@ -815,6 +953,43 @@ export const ManageProduct: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+
+            {totalPages > 1 && (
+                <div className="flex justify-center mt-4 space-x-2">
+                    <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className={`px-3 py-1 rounded-md ${currentPage === 1
+                                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
+                            } transition-all duration-200`}
+                    >
+                        Trước
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                            key={page}
+                            onClick={() => handlePageChange(page)}
+                            className={`px-3 py-1 rounded-md ${currentPage === page
+                                    ? "bg-[#3182CE] text-white"
+                                    : "bg-white text-[#1A202C] hover:bg-[#EDF2F7]"
+                                } transition-all duration-200`}
+                        >
+                            {page}
+                        </button>
+                    ))}
+                    <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className={`px-3 py-1 rounded-md ${currentPage === totalPages
+                                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
+                            } transition-all duration-200`}
+                    >
+                        Sau
+                    </button>
+                </div>
+            )}
 
             {isEditModalOpen && selectedProduct && (
                 <ProductForm

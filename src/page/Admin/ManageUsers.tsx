@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import { getToken } from "../../services/localStorageService";
 
 interface Permission {
@@ -28,63 +30,163 @@ interface User {
 
 interface UserFormProps {
     user: User;
+    roles: Role[];
     onSubmit: (user: User) => void;
     onCancel: () => void;
     title: string;
 }
 
-const UserForm: React.FC<UserFormProps> = ({ user, onSubmit, onCancel, title }) => {
+const UserForm: React.FC<UserFormProps> = ({ user, roles, onSubmit, onCancel, title }) => {
     const [formData, setFormData] = useState<User>({ ...user });
+    const [selectedRoles, setSelectedRoles] = useState<string[]>(user.roles.map((r) => r.name));
+    const [error, setError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleInputChange = (field: keyof User, value: string) => {
+    const validateForm = useCallback(() => {
+        if (!formData.username || formData.username.trim().length < 3) {
+            setError("Tên tài khoản phải có ít nhất 3 ký tự");
+            return false;
+        }
+        if (formData.password && formData.password.length < 6 && formData.id === "0") {
+            setError("Mật khẩu phải có ít nhất 6 ký tự khi tạo mới");
+            return false;
+        }
+        if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+            setError("Email không hợp lệ");
+            return false;
+        }
+        if (!formData.name || formData.name.trim().length < 2) {
+            setError("Họ tên phải có ít nhất 2 ký tự");
+            return false;
+        }
+        if (formData.phone && !/^\d{10,11}$/.test(formData.phone)) {
+            setError("Số điện thoại phải có 10-11 chữ số");
+            return false;
+        }
+        if (selectedRoles.length === 0) {
+            setError("Vui lòng chọn ít nhất một vai trò");
+            return false;
+        }
+        return true;
+    }, [formData, selectedRoles]);
+
+    const handleInputChange = useCallback((field: keyof User, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
-    };
+        setError(null);
+    }, []);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSubmit(formData);
-    };
+    const handleRoleChange = useCallback((roleName: string) => {
+        setSelectedRoles((prev) =>
+            prev.includes(roleName) ? prev.filter((r) => r !== roleName) : [...prev, roleName]
+        );
+        setError(null);
+    }, []);
+
+    const handleSubmit = useCallback(
+        async (e: React.FormEvent) => {
+            e.preventDefault();
+            if (!validateForm()) return;
+            setIsSubmitting(true);
+            try {
+                const updatedFormData: User = {
+                    ...formData,
+                    roles: roles.filter((r) => selectedRoles.includes(r.name)),
+                };
+                await onSubmit(updatedFormData);
+            } finally {
+                setIsSubmitting(false);
+            }
+        },
+        [formData, selectedRoles, roles, onSubmit, validateForm]
+    );
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-            <div className="bg-white p-6 rounded w-full max-w-lg">
-                <h2 className="text-xl font-bold mb-4">{title}</h2>
-                <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 overflow-y-auto z-50">
+            <div className="bg-white p-6 rounded-lg w-full max-w-md sm:max-w-lg shadow-xl">
+                <h2 className="text-xl font-bold text-[#1A202C] mb-4">{title}</h2>
+                {error && (
+                    <div className="bg-red-100 text-[#E53E3E] p-2 rounded mb-4 text-sm">{error}</div>
+                )}
+                <form onSubmit={handleSubmit} className="space-y-4">
                     {[
-                        { label: "Tên tài khoản", name: "username", type: "text" },
-                        { label: "Mật khẩu mới", name: "password", type: "text" },
-                        { label: "Email", name: "email", type: "email" },
-                        { label: "Họ tên", name: "name", type: "text" },
-                        { label: "Số điện thoại", name: "phone", type: "text" },
-                        { label: "Địa chỉ", name: "address", type: "text" }
-                    ].map(field => (
+                        { label: "Tên tài khoản", name: "username", type: "text", required: true },
+                        { label: "Mật khẩu mới", name: "password", type: "password", required: false },
+                        { label: "Email", name: "email", type: "email", required: true },
+                        { label: "Họ tên", name: "name", type: "text", required: true },
+                        { label: "Số điện thoại", name: "phone", type: "text", required: false },
+                        { label: "Địa chỉ", name: "address", type: "text", required: false },
+                    ].map((field) => (
                         <div key={field.name}>
-                            <label className="block text-sm font-medium">{field.label}</label>
+                            <label
+                                htmlFor={field.name}
+                                className={`block text-sm font-medium text-[#1A202C] transition-all duration-300 ${formData[field.name as keyof User] ? "text-[#2C5282] font-semibold" : ""
+                                    }`}
+                            >
+                                {field.label} {field.required && <span className="text-[#E53E3E]">*</span>}
+                            </label>
                             <input
                                 type={field.type}
+                                id={field.name}
                                 value={(formData[field.name as keyof User] as string) || ""}
                                 onChange={(e) => handleInputChange(field.name as keyof User, e.target.value)}
-                                className="w-full border px-3 py-2 rounded"
+                                className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
+                                required={field.required}
                             />
                         </div>
                     ))}
-
                     <div>
-                        <label className="block text-sm font-medium">Giới tính</label>
+                        <label
+                            htmlFor="gender"
+                            className={`block text-sm font-medium text-[#1A202C] transition-all duration-300 ${formData.gender ? "text-[#2C5282] font-semibold" : ""
+                                }`}
+                        >
+                            Giới tính
+                        </label>
                         <select
+                            id="gender"
                             value={formData.gender || "other"}
                             onChange={(e) => handleInputChange("gender", e.target.value)}
-                            className="w-full border px-3 py-2 rounded"
+                            className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
                         >
                             <option value="male">Nam</option>
                             <option value="female">Nữ</option>
                             <option value="other">Khác</option>
                         </select>
                     </div>
-
+                    <div>
+                        <label className="block text-sm font-medium text-[#1A202C] mb-2">
+                            Vai trò <span className="text-[#E53E3E]">*</span>
+                        </label>
+                        <div className="space-y-2">
+                            {roles.map((role) => (
+                                <label key={role.name} className="flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedRoles.includes(role.name)}
+                                        onChange={() => handleRoleChange(role.name)}
+                                        className="form-checkbox h-5 w-5 text-[#3182CE] focus:ring-[#3182CE]"
+                                    />
+                                    <span className="ml-2 text-sm text-[#1A202C]">{role.name}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
                     <div className="flex justify-end space-x-2">
-                        <button type="button" onClick={onCancel} className="bg-gray-400 text-white px-4 py-2 rounded">Hủy</button>
-                        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Lưu</button>
+                        <button
+                            type="button"
+                            onClick={onCancel}
+                            className="bg-gray-300 text-[#1A202C] px-4 py-2 rounded-md hover:bg-gray-400 transition-all duration-200"
+                        >
+                            Hủy
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className={`bg-[#2C5282] text-white px-4 py-2 rounded-md hover:bg-[#3182CE] transition-all duration-200 ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""
+                                }`}
+                        >
+                            Lưu
+                        </button>
                     </div>
                 </form>
             </div>
@@ -92,80 +194,119 @@ const UserForm: React.FC<UserFormProps> = ({ user, onSubmit, onCancel, title }) 
     );
 };
 
-export const ManageUsers = () => {
+export const ManageUsers: React.FC = () => {
     const navigate = useNavigate();
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isAdmin, setIsAdmin] = useState<boolean>(false);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
     const [users, setUsers] = useState<User[]>([]);
+    const [roles, setRoles] = useState<Role[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
     const [sortField, setSortField] = useState<keyof User | "">("");
-    const [searchTerm, setSearchTerm] = useState("");
-    const [countId, setCountId] = useState(1);
+    const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+    const [searchTerm, setSearchTerm] = useState<string>("");
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const [itemsPerPage] = useState<number>(10);
+    const API_URL = typeof process !== "undefined" && process.env.REACT_APP_API_URL
+        ? process.env.REACT_APP_API_URL
+        : "http://localhost:8080/datn";
 
-
-    const checkAdmin = async (accessToken: string) => {
+    const checkAdmin = useCallback(async (accessToken: string) => {
         try {
-            const response = await fetch("http://localhost:8080/datn/users/myInfo", {
+            const response = await fetch(`${API_URL}/users/myInfo`, {
                 method: "GET",
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-
-            if (!response.ok) throw new Error("Không thể kiểm tra quyền admin");
-
-            const data = await response.json();
-            if (data.result.roles?.some((role: { name: string }) => role.name === 'ADMIN')) {
-                setIsAdmin(true);
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập hết hạn");
             }
-        } catch (err) {
+            if (!response.ok) throw new Error("Không thể kiểm tra quyền admin");
+            const data = await response.json();
+            if (data.result?.roles?.some((role: { name: string }) => role.name === "ADMIN")) {
+                setIsAdmin(true);
+            } else {
+                throw new Error("Không có quyền admin");
+            }
+        } catch (err: any) {
             console.error("Error checking admin status:", err);
-            setError("Có lỗi xảy ra khi kiểm tra quyền admin");
+            setError(err.message || "Có lỗi xảy ra khi kiểm tra quyền admin");
         }
-    };
+    }, [navigate]);
 
-    const getAllUser = async (accessToken: string) => {
+    const getAllRoles = useCallback(async (accessToken: string) => {
         try {
-            const response = await fetch("http://localhost:8080/datn/users", {
+            const response = await fetch(`${API_URL}/roles`, {
                 method: "GET",
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-
-            if (!response.ok) throw new Error("Không thể lấy danh sách người dùng");
-
+            if (!response.ok) throw new Error("Không thể lấy danh sách vai trò");
             const data = await response.json();
-            setUsers(data.result);
-        } catch (err) {
-            console.error("Error fetching users:", err);
-            setError("Có lỗi xảy ra khi tải danh sách người dùng");
+            const rolesData = Array.isArray(data.result) ? data.result : data.result?.data || [];
+            setRoles(rolesData);
+        } catch (err: any) {
+            console.error("Error fetching roles:", err);
+            setError(err.message || "Có lỗi xảy ra khi tải danh sách vai trò");
         }
-    };
+    }, []);
 
-    const handleEditUser = (user: User) => {
+    const getAllUsers = useCallback(async (accessToken: string) => {
+        try {
+            const response = await fetch(`${API_URL}/users`, {
+                method: "GET",
+                headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập hết hạn");
+            }
+            if (!response.ok) throw new Error("Không thể lấy danh sách người dùng");
+            const data = await response.json();
+            const usersData = Array.isArray(data.result) ? data.result : data.result?.data || [];
+            setUsers(usersData);
+        } catch (err: any) {
+            console.error("Error fetching users:", err);
+            setError(err.message || "Có lỗi xảy ra khi tải danh sách người dùng");
+        }
+    }, [navigate]);
+
+    const handleEditUser = useCallback((user: User) => {
         setSelectedUser(user);
         setIsEditModalOpen(true);
-    };
+    }, []);
 
-    const handleDeleteUser = async (userId: string) => {
-        if (!window.confirm("Bạn có chắc muốn xóa người dùng này?")) return;
-        try {
-            const accessToken = getToken();
-            const response = await fetch(`http://localhost:8080/datn/users/${userId}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${accessToken}` },
-            });
+    const handleDeleteUser = useCallback(
+        async (userId: string) => {
+            if (!window.confirm("Bạn có chắc muốn xóa người dùng này?")) return;
+            try {
+                const accessToken = getToken();
+                if (!accessToken) throw new Error("Không tìm thấy token");
+                const response = await fetch(`${API_URL}/users/${userId}`, {
+                    method: "DELETE",
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                });
+                if (response.status === 401) {
+                    navigate("/login");
+                    throw new Error("Phiên đăng nhập hết hạn");
+                }
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.message || "Không thể xóa người dùng");
+                }
+                setUsers((prev) => prev.filter((u) => u.id !== userId));
+                setSearchTerm("");
+                toast.success("Xóa người dùng thành công!");
+            } catch (err: any) {
+                console.error("Error deleting user:", err);
+                toast.error(err.message || "Có lỗi xảy ra khi xóa người dùng");
+            }
+        },
+        [navigate]
+    );
 
-            if (!response.ok) throw new Error("Không thể xóa người dùng");
-            setUsers(users.filter((u) => u.id !== userId));
-            window.location.reload();
-        } catch (err) {
-            console.error("Error deleting user:", err);
-            setError("Có lỗi xảy ra khi xóa người dùng");
-        }
-    };
-
-    const handleCreateUser = () => {
+    const handleCreateUser = useCallback(() => {
         const newUser: User = {
             id: "0",
             username: "",
@@ -180,77 +321,89 @@ export const ManageUsers = () => {
         };
         setSelectedUser(newUser);
         setIsCreateModalOpen(true);
-    };
+    }, []);
 
-    const handleCreateUserSubmit = async (formData: User) => {
-        try {
-            const accessToken = getToken();
-            const payload = {
-                ...formData,
-                roles: formData.roles.map(role => role.name),
-            };
-            if (!payload.password) delete payload.password;
+    const handleCreateUserSubmit = useCallback(
+        async (formData: User) => {
+            try {
+                const accessToken = getToken();
+                if (!accessToken) throw new Error("Không tìm thấy token");
+                const payload = {
+                    ...formData,
+                    roles: formData.roles.map((role) => role.name),
+                };
+                if (!payload.password) delete payload.password;
 
-            const response = await fetch(`http://localhost:8080/datn/users`, {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.message || "Không thể tạo người dùng");
+                const response = await fetch(`${API_URL}/users`, {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(payload),
+                });
+                if (response.status === 401) {
+                    navigate("/login");
+                    throw new Error("Phiên đăng nhập hết hạn");
+                }
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.message || "Không thể tạo người dùng");
+                }
+                const newUser = await response.json();
+                setUsers((prev) => [...prev, newUser.result]);
+                setIsCreateModalOpen(false);
+                setSelectedUser(null);
+                toast.success("Tạo người dùng thành công!");
+            } catch (err: any) {
+                console.error("Error creating user:", err);
+                toast.error(err.message || "Có lỗi xảy ra khi tạo người dùng");
             }
+        },
+        [navigate]
+    );
 
-            const newUser = await response.json();
-            setUsers([...users, newUser.result]);
-            alert("Tạo người dùng thành công!");
-            setIsCreateModalOpen(false);
-            setSelectedUser(null);
-            window.location.reload();
-        } catch (err: any) {
-            console.error("Error creating user:", err);
-            setError(err.message || "Có lỗi xảy ra khi tạo người dùng");
-        }
-    };
+    const handleUpdateUser = useCallback(
+        async (formData: User) => {
+            try {
+                const accessToken = getToken();
+                if (!accessToken) throw new Error("Không tìm thấy token");
+                const payload = {
+                    ...formData,
+                    roles: formData.roles.map((role) => role.name),
+                };
+                if (!payload.password) delete payload.password;
 
-    const handleUpdateUser = async (formData: User) => {
-        try {
-            const accessToken = getToken();
-            const payload = {
-                ...formData,
-                roles: formData.roles.map(role => role.name),
-            };
-            if (!payload.password) delete payload.password;
-
-            const response = await fetch(`http://localhost:8080/datn/users/${payload.id}`, {
-                method: "PUT",
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.message || "Không thể cập nhật người dùng");
+                const response = await fetch(`${API_URL}/users/${payload.id}`, {
+                    method: "PUT",
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(payload),
+                });
+                if (response.status === 401) {
+                    navigate("/login");
+                    throw new Error("Phiên đăng nhập hết hạn");
+                }
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.message || "Không thể cập nhật người dùng");
+                }
+                const updatedUser = await response.json();
+                setUsers((prev) =>
+                    prev.map((u) => (u.id === updatedUser.result?.id ? updatedUser.result : u))
+                );
+                setIsEditModalOpen(false);
+                setSelectedUser(null);
+                toast.success("Cập nhật người dùng thành công!");
+            } catch (err: any) {
+                console.error("Error updating user:", err);
+                toast.error(err.message || "Có lỗi xảy ra khi cập nhật người dùng");
             }
-
-            alert("Cập nhật người dùng thành công!");
-            const updatedUser = await response.json();
-            setUsers(users.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
-            setIsEditModalOpen(false);
-            setSelectedUser(null);
-            window.location.reload();
-        } catch (err: any) {
-            console.error("Error updating user:", err);
-            setError(err.message || "Có lỗi xảy ra khi cập nhật người dùng");
-        }
-    };
+        },
+        [navigate]
+    );
 
     useEffect(() => {
         const fetchData = async () => {
@@ -259,41 +412,94 @@ export const ManageUsers = () => {
                 navigate("/login");
                 return;
             }
-            await Promise.all([checkAdmin(accessToken), getAllUser(accessToken)]);
+            await Promise.all([checkAdmin(accessToken), getAllUsers(accessToken), getAllRoles(accessToken)]);
             setIsLoading(false);
         };
-
         fetchData();
-    }, [navigate]);
+    }, [navigate, checkAdmin, getAllUsers, getAllRoles]);
 
     useEffect(() => {
         if (!isLoading && !isAdmin) navigate("/");
     }, [isLoading, isAdmin, navigate]);
 
-    if (isLoading) return <p className="text-center">Đang tải...</p>;
-    if (error) return <p className="text-center text-red-500">{error}</p>;
+    useEffect(() => {
+        if (error) {
+            const timer = setTimeout(() => setError(null), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [error]);
 
-    const filteredUsers = users.filter(user =>
-        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+    // Pagination logic
+    const filteredUsers = users.filter(
+        (user) =>
+            user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            user.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const sortedUsers = [...filteredUsers].sort((a, b) => {
         if (!sortField) return 0;
         const aValue = a[sortField] || "";
         const bValue = b[sortField] || "";
-        return aValue.toString().localeCompare(bValue.toString());
+        return sortDirection === "asc"
+            ? aValue.toString().localeCompare(bValue.toString())
+            : bValue.toString().localeCompare(aValue.toString());
     });
 
+    const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
+    const paginatedUsers = sortedUsers.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    const handlePageChange = useCallback((page: number) => {
+        setCurrentPage(page);
+    }, []);
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-[#EDF2F7]">
+                <div className="flex flex-col items-center">
+                    <svg
+                        className="animate-spin h-8 w-8 text-[#2C5282]"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                    >
+                        <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                        ></circle>
+                        <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                    </svg>
+                    <span className="mt-2 text-[#1A202C]">Đang tải...</span>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="text-center p-6 text-[#E53E3E] bg-red-100 rounded-lg">{error}</div>
+        );
+    }
+
     return (
-        <div className="container mx-auto p-4">
-            <h1 className="text-2xl font-bold mb-4">QUẢN LÝ TÀI KHOẢN</h1>
-            <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center space-x-4">
+        <div className="p-4 sm:p-6 bg-[#EDF2F7]">
+            <h1 className="text-2xl font-bold text-[#1A202C] mb-4">Quản lý tài khoản</h1>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-4 sm:space-y-0">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
                     <button
                         onClick={handleCreateUser}
-                        className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                        className="bg-[#2C5282] text-white px-4 py-2 rounded-md hover:bg-[#3182CE] transition-all duration-200"
                     >
                         + Tạo người dùng mới
                     </button>
@@ -302,59 +508,208 @@ export const ManageUsers = () => {
                         placeholder="Tìm kiếm người dùng..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="border px-3 py-2 rounded w-64"
+                        className="border border-gray-300 px-3 py-2 rounded-md w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
                     />
                 </div>
                 <select
                     value={sortField}
-                    onChange={(e) => setSortField(e.target.value as keyof User)}
-                    className="border px-3 py-2 rounded"
+                    onChange={(e) => {
+                        setSortField(e.target.value as keyof User);
+                        setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+                    }}
+                    className="border border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200 w-full sm:w-auto"
                 >
                     <option value="">-- Sắp xếp theo --</option>
-                    <option value="name">Họ tên</option>
-                    <option value="email">Email</option>
-                    <option value="username">Tên đăng nhập</option>
+                    <option value="username">
+                        Tên đăng nhập {sortDirection === "asc" ? "↑" : "↓"}
+                    </option>
+                    <option value="name">Họ tên {sortDirection === "asc" ? "↑" : "↓"}</option>
+                    <option value="email">Email {sortDirection === "asc" ? "↑" : "↓"}</option>
                 </select>
             </div>
-            <div className="overflow-x-auto ">
-                <table className="min-w-full border">
+            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
+                <table className="min-w-full border border-gray-200">
                     <thead>
-                        <tr className="bg-[#371A16] text-white">
-                            <th className="p-2">Số thứ tự</th><th>Username</th><th>Tên</th><th>Email</th><th>Điện thoại</th><th>Vai trò</th><th>Trạng thái</th><th>Hành động</th>
+                        <tr className="bg-[#2C5282] text-white text-sm uppercase tracking-wider">
+                            <th className="py-3 px-4 border-b border-gray-200 text-center w-16 sm:w-20">
+                                STT
+                            </th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center">
+                                Tên đăng nhập
+                            </th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center">Họ tên</th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center hidden md:table-cell">
+                                Email
+                            </th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center hidden md:table-cell">
+                                Điện thoại
+                            </th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center hidden lg:table-cell">
+                                Vai trò
+                            </th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center">Trạng thái</th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center w-24 sm:w-32">
+                                Hành động
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
-                        {sortedUsers.length > 0 ? sortedUsers.map((user, index) => (
-                            
-                            <tr key={user.id} className="border-t">
-                                <td className="p-2 text-center">{index+1}</td>
-                                <td>{user.username}</td>
-                                <td>{user.name}</td>
-                                <td>{user.email}</td>
-                                <td>{user.phone || "N/A"}</td>
-                                <td>{user.roles.map((r) => r.name).join(", ")}</td>
-                                <td className="text-center">{user.status === "1" ? "Hoạt động" : "Không hoạt động"}</td>
-                                <td className="text-center">
-                                    <button onClick={() => handleEditUser(user)} className="text-blue-500"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" className="size-6">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
-                                    </svg>
-                                    </button>
-                                    <button onClick={() => handleDeleteUser(user.id)} className="text-red-500 ml-2"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" className="size-6">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                                    </svg>
-                                    </button>
+                        {isLoading ? (
+                            Array.from({ length: itemsPerPage }).map((_, index) => (
+                                <tr key={index}>
+                                    <td className="py-3 px-4">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4 hidden md:table-cell">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4 hidden md:table-cell">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4 hidden lg:table-cell">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : paginatedUsers.length > 0 ? (
+                            paginatedUsers.map((user, index) => (
+                                <tr
+                                    key={user.id}
+                                    className={`border-b border-gray-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                                        } hover:bg-[#EDF2F7] transition-colors duration-200`}
+                                >
+                                    <td className="py-3 px-4 text-center text-[#1A202C]">
+                                        {(currentPage - 1) * itemsPerPage + index + 1}
+                                    </td>
+                                    <td className="py-3 px-4 text-[#1A202C] text-center truncate">
+                                        {user.username}
+                                    </td>
+                                    <td className="py-3 px-4 text-[#1A202C] text-center truncate">
+                                        {user.name}
+                                    </td>
+                                    <td className="py-3 px-4 text-[#1A202C] text-center hidden md:table-cell truncate">
+                                        {user.email}
+                                    </td>
+                                    <td className="py-3 px-4 text-[#1A202C] text-center hidden md:table-cell">
+                                        {user.phone || "N/A"}
+                                    </td>
+                                    <td className="py-3 px-4 text-[#1A202C] text-center hidden lg:table-cell truncate">
+                                        {user.roles.map((r) => r.name).join(", ") || "N/A"}
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                        <span
+                                            className={`inline-block w-3 h-3 rounded-full ${user.status === "1" ? "bg-[#38A169]" : "bg-[#E53E3E]"
+                                                }`}
+                                        ></span>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                        <button
+                                            onClick={() => handleEditUser(user)}
+                                            className="text-[#3182CE] hover:text-[#2C5282] transition-colors duration-200 mr-2 sm:mr-4"
+                                            title="Chỉnh sửa"
+                                        >
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                strokeWidth="1.5"
+                                                stroke="currentColor"
+                                                className="w-5 h-5"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
+                                                />
+                                            </svg>
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteUser(user.id)}
+                                            className="text-[#E53E3E] hover:text-red-700 transition-colors duration-200"
+                                            title="Xóa"
+                                        >
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                strokeWidth="1.5"
+                                                stroke="currentColor"
+                                                className="w-5 h-5"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
+                                                />
+                                            </svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={8} className="py-3 px-4 text-center text-[#1A202C]">
+                                    Không có người dùng
                                 </td>
                             </tr>
-                        )) : (
-                            <tr><td colSpan={8} className="text-center">Không có người dùng</td></tr>
                         )}
                     </tbody>
                 </table>
             </div>
 
+            {totalPages > 1 && (
+                <div className="flex justify-center mt-4 space-x-2">
+                    <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className={`px-3 py-1 rounded-md ${currentPage === 1
+                                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
+                            } transition-all duration-200`}
+                    >
+                        Trước
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                            key={page}
+                            onClick={() => handlePageChange(page)}
+                            className={`px-3 py-1 rounded-md ${currentPage === page
+                                    ? "bg-[#3182CE] text-white"
+                                    : "bg-white text-[#1A202C] hover:bg-[#EDF2F7]"
+                                } transition-all duration-200`}
+                        >
+                            {page}
+                        </button>
+                    ))}
+                    <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className={`px-3 py-1 rounded-md ${currentPage === totalPages
+                                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
+                            } transition-all duration-200`}
+                    >
+                        Sau
+                    </button>
+                </div>
+            )}
+
             {isEditModalOpen && selectedUser && (
                 <UserForm
                     user={selectedUser}
+                    roles={roles}
                     onSubmit={handleUpdateUser}
                     onCancel={() => setIsEditModalOpen(false)}
                     title="Chỉnh sửa người dùng"
@@ -364,6 +719,7 @@ export const ManageUsers = () => {
             {isCreateModalOpen && selectedUser && (
                 <UserForm
                     user={selectedUser}
+                    roles={roles}
                     onSubmit={handleCreateUserSubmit}
                     onCancel={() => setIsCreateModalOpen(false)}
                     title="Tạo người dùng mới"

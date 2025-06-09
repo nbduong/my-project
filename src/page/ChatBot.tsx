@@ -71,7 +71,7 @@ export const Chatbot: React.FC = () => {
 
         // Create product list string for context
         const productList = products
-            .map(product => `ID: ${product.id}, Name: ${product.name}, Price: ${product.price}, Category: ${product.category}`)
+            .map(product => `ID: ${product.id}, Name: ${product.name}, Price: ${product.price}, Category: ${product.categoryName}`)
             .join('\n');
 
         // Create conversation history string with clear context
