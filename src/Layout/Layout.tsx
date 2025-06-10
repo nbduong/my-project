@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -24,6 +23,16 @@ interface Category {
   name: string;
 }
 
+interface Message {
+  text: string;
+  sender: 'user' | 'bot';
+}
+
+interface ApiResponse<T> {
+  code: number;
+  result: T;
+}
+
 const API_URL = 'http://localhost:8080/datn';
 
 export default function Layout() {
@@ -41,9 +50,24 @@ export default function Layout() {
   const [showCartDropdown, setShowCartDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [showChatbot, setShowChatbot] = useState(false);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = localStorage.getItem('chatHistory');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Transform the parsed data to ensure sender is "user" or "bot"
+      return parsed.map((msg: any) => ({
+        text: msg.text,
+        sender: msg.sender === 'user' || msg.sender === 'bot' ? msg.sender : 'bot', // Default to 'bot' if invalid
+      })) as Message[];
+    }
+    return [];
+  });
+  const [chatInput, setChatInput] = useState('');
   const searchRef = useRef<HTMLDivElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
   const cartRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Memoized debounce function
   const debounce = useCallback((func: (...args: any[]) => void, delay: number) => {
@@ -60,11 +84,13 @@ export default function Layout() {
       if (
         searchRef.current && !searchRef.current.contains(event.target as Node) &&
         accountRef.current && !accountRef.current.contains(event.target as Node) &&
-        cartRef.current && !cartRef.current.contains(event.target as Node)
+        cartRef.current && !cartRef.current.contains(event.target as Node) &&
+        chatContainerRef.current && !chatContainerRef.current.contains(event.target as Node)
       ) {
         setShowSuggestions(false);
         setShowAccountMenu(false);
         setShowCartDropdown(false);
+        setShowChatbot(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -87,6 +113,16 @@ export default function Layout() {
   useEffect(() => {
     saveCart(cartItems);
   }, [cartItems]);
+
+  // Save chat history to localStorage and scroll to bottom
+  useEffect(() => {
+    localStorage.setItem('chatHistory', JSON.stringify(messages));
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+
 
   // API calls
   const getUserDetails = useCallback(async (accessToken: string) => {
@@ -131,8 +167,8 @@ export default function Layout() {
         return;
       }
       if (!response.ok) throw new Error('Không thể lấy danh sách sản phẩm');
-      const data = await response.json();
-      const productsData = Array.isArray(data.result) ? data.result : data.result?.data || [];
+      const data: ApiResponse<Product[]> = await response.json();
+      const productsData = data.result;
       setProducts(productsData);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -152,6 +188,62 @@ export default function Layout() {
     fetchCategories();
     fetchProducts();
   }, [getUserDetails, fetchCategories, fetchProducts]);
+
+  // Chatbot send message
+  const sendMessage = async (): Promise<void> => {
+    if (!chatInput.trim()) return;
+
+    // Add user message
+    const newMessages = [...messages, { text: chatInput, sender: 'user' as const }];
+    setMessages(newMessages);
+    setChatInput('');
+
+    // Create product list string for context
+    const productList = products
+      .map(product => `ID: ${product.id}, Name: ${product.name}, Price: ${product.price}, Category: ${product.categoryName}`)
+      .join('\n');
+
+    // Create conversation history string
+    const history = newMessages
+      .map(msg => `${msg.sender === 'user' ? 'User' : 'Assistant'}: ${msg.text}`)
+      .join('\n');
+    const prompt = `Bạn là một trợ lý AI của cửa hàng GearVN, chuyên gia về cấu hình và linh kiện máy tính. Dựa trên lịch sử hội thoại và danh sách sản phẩm dưới đây, trả lời câu hỏi hiện tại hoặc gợi ý sản phẩm phù hợp một cách ngắn gọn trong khoảng 3 dòng đến 5 dòng là nhiều nhất, trực tiếp và liên quan đến ngữ cảnh. Nếu người dùng yêu cầu gợi ý sản phẩm, hãy sử dụng danh sách sản phẩm để đưa ra gợi ý cụ thể, bao gồm tên sản phẩm, giá và lý do gợi ý. Danh sách sản phẩm:\n${productList}\n\nLịch sử hội thoại:\n${history}\n\nUser: ${chatInput}`;
+
+    try {
+      const response = await fetch('http://localhost:11434/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama3.1',
+          prompt,
+          stream: false,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data: { response: string } = await response.json();
+      setMessages(prev => [...prev, { text: data.response || 'No response from bot', sender: 'bot' }]);
+    } catch (error: unknown) {
+      console.error('Error:', error);
+      setMessages(prev => [...prev, { text: `Error: Could not connect to Ollama server - ${error}`, sender: 'bot' }]);
+    }
+  };
+
+  const handleChatKeyPress = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter') {
+      sendMessage();
+    }
+  };
+
+  const clearChatHistory = (): void => {
+    localStorage.removeItem('chatHistory');
+    setMessages([]);
+  };
 
   // Search suggestions
   const filterSuggestions = useCallback((query: string) => {
@@ -336,7 +428,6 @@ export default function Layout() {
             <line x1="6" y1="17" x2="6" y2="21" strokeWidth="1" />
             <line x1="9" y1="17" x2="9" y2="21" strokeWidth="1" />
             <line x1="12" y1="17" x2="12" y2="21" strokeWidth="1" />
-            <line x1="15" y1="17" x2="15" y2="21" strokeWidth="1" />
             <line x1="18" y1="17" x2="18" y2="21" strokeWidth="1" />
           </svg>
         );
@@ -392,7 +483,7 @@ export default function Layout() {
           <Link to="/" className="flex items-center">
             <img src="/logo.png" alt="GearVN Logo" className="h-12 w-auto" onError={(e) => { e.currentTarget.src = '/avatar.png'; }} />
           </Link>
-          <div className="flex-1 mx-4 relative " ref={searchRef}>
+          <div className="flex-1 mx-4 relative" ref={searchRef}>
             <div className="flex items-center bg-white rounded-lg shadow-sm overflow-hidden w-[500px]">
               <svg className="w-5 h-5 text-gray-500 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
@@ -400,7 +491,7 @@ export default function Layout() {
               <input
                 type="text"
                 placeholder="Tìm kiếm sản phẩm..."
-                className="flex-1 p-2 text-gray-800 text-sm focus:outline-none "
+                className="flex-1 p-2 text-gray-800 text-sm focus:outline-none"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -416,7 +507,7 @@ export default function Layout() {
               </button>
             </div>
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 w-full bg-white border rounded-lg mt-1 shadow-lg max-h-60 overflow-y-auto z-50">
+              <div className="absolute top-full left-0 w-[500px] bg-white border rounded-lg mt-1 shadow-lg max-h-60 overflow-y-auto z-50">
                 {suggestions.map((product) => (
                   <div
                     key={product.id}
@@ -439,12 +530,6 @@ export default function Layout() {
             )}
           </div>
           <div className="flex items-center space-x-4">
-            <Link to="/chatbot" className="hover:text-[#FBBF24] transition-colors flex flex-col items-center">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 0 1 1.037-.443 48.282 48.282 0 0 0 5.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-              </svg>
-              <span className="text-xs mt-1">Chat</span>
-            </Link>
             <div className="relative" ref={cartRef}>
               <button
                 onClick={() => setShowCartDropdown((prev) => !prev)}
@@ -452,7 +537,7 @@ export default function Layout() {
                 aria-label="Giỏ hàng"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1  Vald1.5 0Zm12.75 0a.75.75 0 1 1-1.50 .75.75 0 0 1 1.5 0Z" />
                 </svg>
                 <span className="text-xs mt-1">Giỏ hàng</span>
                 {getTotalItems() > 0 && (
@@ -681,6 +766,63 @@ export default function Layout() {
           <Outlet context={{ addToCart, cartItems, removeFromCart, updateQuantity, getTotalItems, getTotalPrice, clearCart: handleClearCart }} />
         </div>
       </main>
+      {/* Chatbot Widget */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <button
+          onClick={() => setShowChatbot((prev) => !prev)}
+          className="bg-[#3B82F6] text-white p-3 rounded-full shadow-lg hover:bg-[#2563EB] transition-all duration-200"
+          aria-label="Mở chatbot"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 0 1 1.037-.443 48.282 48.282 0 0 0 5.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+          </svg>
+        </button>
+        {showChatbot && (
+          <div
+            ref={chatContainerRef}
+            className="absolute bottom-16 right-0 w-80 bg-white border border-gray-300 rounded-lg shadow-lg p-4 max-h-96 flex flex-col"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-semibold text-[#1E3A8A]">Trợ lý ảo GearBot</h3>
+              <button
+                onClick={clearChatHistory}
+                className="text-[#EF4444] hover:text-red-700 text-sm"
+                aria-label="Xóa lịch sử trò chuyện"
+              >
+                Xóa
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto mb-2">
+              {messages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`p-2 rounded-md mb-2 text-sm ${msg.sender === 'user' ? 'bg-[#3B82F6] text-white ml-8' : 'bg-gray-200 text-gray-800 mr-8'
+                    }`}
+                >
+                  {msg.text}
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyPress={handleChatKeyPress}
+                placeholder="Nhập câu hỏi..."
+                className="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+              />
+              <button
+                onClick={sendMessage}
+                className="bg-[#3B82F6] text-white px-3 py-2 rounded-md text-sm hover:bg-[#2563EB]"
+                aria-label="Gửi tin nhắn"
+              >
+                Gửi
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
       <footer className="bg-[#1E3A8A] text-white py-8 mt-8">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -729,7 +871,7 @@ export default function Layout() {
       {showBackToTop && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-4 right-4 p-3 bg-[#3B82F6] text-white rounded-full shadow-lg hover:bg-[#2563EB] transition-all duration-200"
+          className="fixed bottom-4 right-20 p-3 bg-[#3B82F6] text-white rounded-full shadow-lg hover:bg-[#2563EB] transition-all duration-200"
           aria-label="Quay lại đầu trang"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

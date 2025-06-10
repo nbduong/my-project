@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -26,6 +25,7 @@ interface User {
     gender?: "male" | "female" | "other";
     roles: Role[];
     status: string;
+    isDeleted?: boolean; // Added isDeleted field
 }
 
 interface UserFormProps {
@@ -318,6 +318,7 @@ export const ManageUsers: React.FC = () => {
             gender: "other",
             roles: [],
             status: "1",
+            isDeleted: false, // Added default value for isDeleted
         };
         setSelectedUser(newUser);
         setIsCreateModalOpen(true);
@@ -548,6 +549,7 @@ export const ManageUsers: React.FC = () => {
                                 Vai trò
                             </th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center">Trạng thái</th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center">Đã xóa</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-center w-24 sm:w-32">
                                 Hành động
                             </th>
@@ -573,6 +575,9 @@ export const ManageUsers: React.FC = () => {
                                         <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
                                     </td>
                                     <td className="py-3 px-4 hidden lg:table-cell">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4">
                                         <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
                                     </td>
                                     <td className="py-3 px-4">
@@ -613,6 +618,13 @@ export const ManageUsers: React.FC = () => {
                                             className={`inline-block w-3 h-3 rounded-full ${user.status === "1" ? "bg-[#38A169]" : "bg-[#E53E3E]"
                                                 }`}
                                         ></span>
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                        <span
+                                            className={`inline-block w-3 h-3 rounded-full ${user.isDeleted ? "bg-[#E53E3E]" : "bg-[#38A169]"
+                                                }`}
+                                        >
+                                        </span>
                                     </td>
                                     <td className="py-3 px-4 text-center">
                                         <button
@@ -660,7 +672,7 @@ export const ManageUsers: React.FC = () => {
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={8} className="py-3 px-4 text-center text-[#1A202C]">
+                                <td colSpan={9} className="py-3 px-4 text-center text-[#1A202C]">
                                     Không có người dùng
                                 </td>
                             </tr>
@@ -675,8 +687,8 @@ export const ManageUsers: React.FC = () => {
                         onClick={() => handlePageChange(currentPage - 1)}
                         disabled={currentPage === 1}
                         className={`px-3 py-1 rounded-md ${currentPage === 1
-                                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                                : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
                             } transition-all duration-200`}
                     >
                         Trước
@@ -686,8 +698,8 @@ export const ManageUsers: React.FC = () => {
                             key={page}
                             onClick={() => handlePageChange(page)}
                             className={`px-3 py-1 rounded-md ${currentPage === page
-                                    ? "bg-[#3182CE] text-white"
-                                    : "bg-white text-[#1A202C] hover:bg-[#EDF2F7]"
+                                ? "bg-[#3182CE] text-white"
+                                : "bg-white text-[#1A202C] hover:bg-[#EDF2F7]"
                                 } transition-all duration-200`}
                         >
                             {page}
@@ -697,8 +709,8 @@ export const ManageUsers: React.FC = () => {
                         onClick={() => handlePageChange(currentPage + 1)}
                         disabled={currentPage === totalPages}
                         className={`px-3 py-1 rounded-md ${currentPage === totalPages
-                                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                                : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
                             } transition-all duration-200`}
                     >
                         Sau

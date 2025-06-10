@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -39,7 +38,6 @@ export function CheckoutPage() {
     const [orderNote, setOrderNote] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [addressError, setAddressError] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
 
     const cartItems: CartItem[] = location.state?.cartItems || [];
     const totalAmount: number = location.state?.totalPrice || 0;
@@ -61,7 +59,6 @@ export function CheckoutPage() {
         }
 
         const controller = new AbortController();
-        setIsLoading(true);
         axios
             .get(`${API_URL}/users/myInfo`, {
                 headers: { Authorization: `Bearer ${token}` },
@@ -86,7 +83,7 @@ export function CheckoutPage() {
                     navigate('/cart');
                 }
             })
-            .finally(() => setIsLoading(false));
+            .finally(() => { });
 
         return () => controller.abort();
     }, [token, navigate, location.pathname]);
@@ -102,25 +99,29 @@ export function CheckoutPage() {
         setIsSubmitting(true);
 
         try {
-            await axios.post(`${API_URL}/orders/place`, {
-                userId: userInfo?.id,
-                userName: userInfo?.username,
-                status: 'Chưa thanh toán',
-                shippingAddress,
-                paymentMethod,
-                totalAmount: totalAmount + SHIPPING_COST,
-                shipmentMethod: shippingMethod,
-                orderNote,
-                orderItems: cartItems.map((item) => ({
-                    productId: item.product.id,
-                    quantity: item.quantity,
-                })),
-            }, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
+            await axios.post(
+                `${API_URL}/orders/place`,
+                {
+                    userId: userInfo?.id,
+                    userName: userInfo?.username,
+                    status: 'Chưa thanh toán',
+                    shippingAddress,
+                    paymentMethod,
+                    totalAmount: totalAmount + SHIPPING_COST,
+                    shipmentMethod: shippingMethod,
+                    orderNote,
+                    orderItems: cartItems.map((item) => ({
+                        productId: item.product.id,
+                        quantity: item.quantity,
+                    })),
                 },
-            });
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
 
             toast.success('Đặt hàng thành công!');
             clearCart();
@@ -135,50 +136,16 @@ export function CheckoutPage() {
         } finally {
             setIsSubmitting(false);
         }
-    }, [
-        userInfo,
-        shippingAddress,
-        paymentMethod,
-        shippingMethod,
-        orderNote,
-        cartItems,
-        totalAmount,
-        token,
-        navigate,
-        location.pathname,
-    ]);
-
-    if (isLoading) {
-        return (
-            <div className="max-w-6xl mx-auto p-4 sm:p-6">
-                <div className="animate-pulse space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-4">
-                            <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-                            {[...Array(5)].map((_, i) => (
-                                <div key={i} className="h-12 bg-gray-200 rounded"></div>
-                            ))}
-                            <div className="h-16 bg-gray-200 rounded w-1/2 ml-auto"></div>
-                            <div className="h-12 bg-gray-200 rounded"></div>
-                        </div>
-                        <div className="space-y-4">
-                            <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-                            <div className="h-64 bg-gray-200 rounded"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    }, [userInfo, shippingAddress, paymentMethod, shippingMethod, orderNote, cartItems, totalAmount, token, navigate, location.pathname]);
 
     return (
-        <div className="max-w-6xl mx-auto p-4 sm:p-6 bg-gray-100">
+        <div className="py-8 px-4 container mx-auto bg-gray-100 min-h-screen">
             <h1 className="text-3xl font-bold text-[#1E3A8A] mb-6">Thanh toán</h1>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Checkout Form */}
                 <div>
-                    <h2 className="text-xl font-bold text-[#1F2937] mb-4">Thông tin thanh toán</h2>
-                    <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleConfirmOrder(); }}>
+                    <h2 className="text-xl font-bold text-[#1E3A8A] mb-4">Thông tin thanh toán</h2>
+                    <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleConfirmOrder(); }}>
                         <div>
                             <label htmlFor="username" className="block font-medium text-[#1F2937] mb-1">
                                 Tên khách hàng
@@ -188,23 +155,23 @@ export function CheckoutPage() {
                                 className="w-full border border-gray-300 px-3 py-2 rounded bg-gray-100 pointer-events-none"
                                 value={userInfo?.username || ''}
                                 disabled
-                                aria-disabled="true"
                                 aria-label="Tên khách hàng (không thể chỉnh sửa)"
                             />
                         </div>
                         <div>
                             <label htmlFor="shippingAddress" className="block font-medium text-[#1F2937] mb-1">
-                                Địa chỉ giao hàng
+                                Địa chỉ giao hàng *
                             </label>
                             <textarea
                                 id="shippingAddress"
-                                className={`w-full border ${addressError ? 'border-[#EF4444]' : 'border-gray-300'} px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6]`}
+                                className={`w-full border ${addressError ? 'border-[#EF4444]' : 'border-gray-300'} px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6] resize-y`}
                                 value={shippingAddress}
                                 onChange={(e) => {
                                     setShippingAddress(e.target.value);
                                     setAddressError('');
                                 }}
                                 rows={3}
+                                placeholder="Nhập địa chỉ giao hàng..."
                                 aria-describedby={addressError ? 'address-error' : undefined}
                                 aria-label="Địa chỉ giao hàng"
                             />
@@ -220,13 +187,13 @@ export function CheckoutPage() {
                             </label>
                             <select
                                 id="paymentMethod"
-                                className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                                className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6] appearance-none bg-white"
                                 value={paymentMethod}
                                 onChange={(e) => setPaymentMethod(e.target.value)}
                                 aria-label="Phương thức thanh toán"
                             >
-                                <option value="cash">Tiền mặt</option>
-                                <option value="bank">Chuyển khoản</option>
+                                <option value="cash">Tiền mặt khi nhận hàng</option>
+                                <option value="bank">Chuyển khoản ngân hàng</option>
                             </select>
                         </div>
                         <div>
@@ -235,7 +202,7 @@ export function CheckoutPage() {
                             </label>
                             <select
                                 id="shippingMethod"
-                                className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                                className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6] appearance-none bg-white"
                                 value={shippingMethod}
                                 onChange={(e) => setShippingMethod(e.target.value)}
                                 aria-label="Đơn vị vận chuyển"
@@ -250,36 +217,34 @@ export function CheckoutPage() {
                             </label>
                             <textarea
                                 id="orderNote"
-                                className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                                className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6] resize-y"
                                 value={orderNote}
                                 onChange={(e) => setOrderNote(e.target.value)}
-                                placeholder="Ghi chú thêm nếu có..."
+                                placeholder="Ví dụ: Giao hàng giờ hành chính..."
                                 rows={3}
                                 aria-label="Ghi chú đơn hàng"
                             />
                         </div>
-                        <div className="text-right font-bold mt-6 flex flex-col items-end">
-                            <div className="w-full max-w-xs space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-[#1F2937]">Tạm tính:</span>
-                                    <span className="text-[#1F2937]">{totalAmount.toLocaleString()} VNĐ</span>
+                        <div className="text-right font-semibold mt-6">
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-sm text-[#1F2937]">
+                                    <span>Tạm tính:</span>
+                                    <span>{totalAmount.toLocaleString()} VNĐ</span>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-[#1F2937]">Vận chuyển:</span>
-                                    <span className="text-[#1F2937]">{SHIPPING_COST.toLocaleString()} VNĐ</span>
+                                <div className="flex justify-between text-sm text-[#1F2937]">
+                                    <span>Phí vận chuyển:</span>
+                                    <span>{SHIPPING_COST.toLocaleString()} VNĐ</span>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-[#1F2937]">Thành tiền:</span>
-                                    <span className="text-lg text-[#EF4444] font-bold">
-                                        {(totalAmount + SHIPPING_COST).toLocaleString()} VNĐ
-                                    </span>
+                                <div className="flex justify-between text-lg text-[#1E3A8A] font-bold">
+                                    <span>Thành tiền:</span>
+                                    <span>{(totalAmount + SHIPPING_COST).toLocaleString()} VNĐ</span>
                                 </div>
                             </div>
                         </div>
                         <button
                             type="submit"
                             disabled={isSubmitting || !!addressError}
-                            className="w-full mt-4 bg-[#3B82F6] text-white py-3 rounded hover:bg-[#2563EB] disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
+                            className="w-full mt-4 bg-[#3B82F6] text-white py-3 rounded-lg hover:bg-[#2563EB] disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                             aria-label="Xác nhận đơn hàng"
                         >
                             {isSubmitting ? 'Đang xử lý...' : 'Xác nhận đơn hàng'}
@@ -288,21 +253,26 @@ export function CheckoutPage() {
                 </div>
                 {/* Cart Items */}
                 <div>
-                    <h2 className="text-xl font-bold text-[#1F2937] mb-4">Sản phẩm trong giỏ hàng</h2>
-                    <div className="max-h-[60vh] overflow-y-auto border border-gray-300 p-4 rounded-lg bg-white">
+                    <h2 className="text-xl font-bold text-[#1E3A8A] mb-4">Sản phẩm trong giỏ hàng</h2>
+                    <div className="max-h-[60vh] overflow-y-auto border border-gray-200 p-4 rounded-lg bg-white shadow-sm">
                         {cartItems.length === 0 ? (
-                            <p className="text-[#1F2937]">Không có sản phẩm nào.</p>
+                            <p className="text-[#1F2937] text-center">Không có sản phẩm nào.</p>
                         ) : (
-                            cartItems.map((item: CartItem, index: number) => (
-                                <div key={index} className="flex items-center gap-4 border-b border-gray-200 pb-3 mb-3 last:mb-0 last:border-b-0">
+                            cartItems.map((item, index) => (
+                                <div
+                                    key={index}
+                                    className="flex items-center gap-4 py-3 border-b border-gray-200 last:border-b-0"
+                                >
                                     <img
                                         src={`${API_URL}/${item.product.images?.[0] || 'avatar.png'}`}
                                         alt={`${item.product.name} (${item.product.categoryName || 'Product'})`}
-                                        className="w-16 h-16 object-contain rounded"
+                                        className="w-16 h-16 object-contain rounded-lg"
                                         onError={(e) => { e.currentTarget.src = '/avatar.png'; }}
                                     />
                                     <div className="flex-1">
-                                        <h4 className="font-semibold text-[#1F2937] text-sm line-clamp-2">{item.product.name}</h4>
+                                        <h4 className="font-semibold text-[#1F2937] text-sm line-clamp-2">
+                                            {item.product.name}
+                                        </h4>
                                         <p className="text-sm text-gray-600">Số lượng: {item.quantity}</p>
                                         <p className="text-sm text-gray-600">
                                             Giá: {(item.product.price * item.quantity).toLocaleString()} VNĐ

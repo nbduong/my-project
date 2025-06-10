@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getToken, setToken } from "../services/localStorageService";
-import '../index.css';
 
 export const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -17,18 +16,14 @@ export const Login = () => {
   }, [navigate]);
 
   const validateForm = () => {
-    // Validate username (6-20 ký tự, chỉ chứa chữ, số và dấu gạch dưới)
     if (!/^[a-zA-Z0-9_]{4,20}$/.test(username)) {
-      setError("Tên tài khoản phải từ 6-20 ký tự, chỉ chứa chữ, số và dấu gạch dưới");
+      setError("Tên tài khoản phải từ 4-20 ký tự, chỉ chứa chữ, số và dấu gạch dưới");
       return false;
     }
-
-    // Validate password (8-20 ký tự, phải có ít nhất 1 chữ hoa, 1 chữ thường, 1 số và 1 ký tự đặc biệt)
     if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,20}$/.test(password)) {
       setError("Mật khẩu phải từ 8-20 ký tự, chứa ít nhất 1 chữ hoa, 1 chữ thường, 1 số và 1 ký tự đặc biệt");
       return false;
     }
-
     return true;
   };
 
@@ -41,9 +36,7 @@ export const Login = () => {
 
     fetch("http://localhost:8080/datn/auth/token", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     })
       .then((res) => res.json())
@@ -51,7 +44,6 @@ export const Login = () => {
         if (data.code !== 0) throw new Error(data.message);
         setToken(data.result?.token);
         navigate("/dashboard");
-        window.location.reload();
       })
       .catch((err) => {
         setError("Đăng nhập thất bại: " + err.message);
@@ -59,76 +51,75 @@ export const Login = () => {
   };
 
   return (
-    <div className="flex items-start justify-center h-screen bg-[#ffffff]">
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <form
         onSubmit={handleSubmit}
-        className="w-[500px] p-6 bg-[#E7E8EA] shadow-xl rounded-2xl"
+        className="w-full max-w-md p-6 bg-white shadow-lg rounded-lg"
       >
-        <h2 className="text-3xl font-bold text-center text-[#371A16]">
+        <h2 className="text-3xl font-bold text-center text-[#1E3A8A] mb-4">
           ĐĂNG NHẬP
         </h2>
-        <p className="text-center mt-2">
+        <p className="text-center text-sm text-gray-600 mb-6">
           Nếu bạn chưa có tài khoản,{" "}
-          <Link
-            to="/signup"
-            className="text-[#371A16] font-medium hover:font-bold"
-          >
+          <Link to="/signup" className="text-[#3B82F6] font-medium hover:underline">
             đăng ký tại đây
           </Link>
         </p>
 
         {error && (
-          <div className="bg-red-100 text-red-700 p-2 rounded mb-4 text-sm">
+          <div className="bg-[#EF4444]/10 text-[#EF4444] p-2 rounded mb-4 text-sm text-center">
             {error}
           </div>
         )}
 
         {/* Input Username */}
-        <div className="mt-6 relative">
+        <div className="mb-6 relative">
           <label
             htmlFor="username"
-            className={`absolute left-3 transition-all duration-300 text-sm font-semibold username-label ${username
-              ? "top-[-20px] text-[#371A16]"
-              : "top-1/2 transform -translate-y-[8px] text-gray-500"
+            className={`absolute left-3 transition-all duration-300 text-sm font-medium ${username
+              ? "top-[-10px] text-[#1E3A8A] bg-white px-1"
+              : "top-1/2 -translate-y-1/2 text-gray-500"
               }`}
           >
-            Tài khoản: <sup className="text-red-500">*</sup>
+            Tài khoản <sup className="text-[#EF4444]">*</sup>
           </label>
           <input
             type="text"
             id="username"
-            placeholder=""
-            className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#371A16] transition-all duration-300 border border-gray-300 hover:border-[#371A16] bg-white"
+            className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] transition-all"
             onChange={(e) => setUsername(e.target.value)}
             value={username}
             required
+            aria-label="Tài khoản"
           />
         </div>
 
         {/* Input Password */}
-        <div className="mt-6 relative">
+        <div className="mb-6 relative">
           <label
             htmlFor="password"
-            className={`absolute left-3 transition-all duration-300 text-sm font-semibold password-label ${password
-              ? "top-[-20px] text-[#371A16]"
-              : "top-1/2 transform -translate-y-[8px] text-gray-500"
+            className={`absolute left-3 transition-all duration-300 text-sm font-medium ${password
+              ? "top-[-10px] text-[#1E3A8A] bg-white px-1"
+              : "top-1/2 -translate-y-1/2 text-gray-500"
               }`}
           >
-            Mật khẩu: <sup className="text-red-500">*</sup>
+            Mật khẩu <sup className="text-[#EF4444]">*</sup>
           </label>
           <input
             type={showPassword ? "text" : "password"}
             id="password"
-            placeholder=""
-            className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#371A16] transition-all duration-300 border border-gray-300 hover:border-[#371A16] bg-white"
+
+            className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] transition-all pr-10"
             onChange={(e) => setPassword(e.target.value)}
             value={password}
             required
+            aria-label="Mật khẩu"
           />
           <button
             type="button"
-            className="absolute right-2 top-[50%] transform -translate-y-1/2"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-[#1E3A8A] hover:text-[#2563EB]"
             onClick={() => setShowPassword(!showPassword)}
+            aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
           >
             {showPassword ? (
               <svg
@@ -137,7 +128,7 @@ export const Login = () => {
                 viewBox="0 0 24 24"
                 strokeWidth={1.5}
                 stroke="currentColor"
-                className="w-6 h-6 text-[#371A16] hover:text-[#5a2e1a] transition-colors"
+                className="w-5 h-5"
               >
                 <path
                   strokeLinecap="round"
@@ -157,7 +148,7 @@ export const Login = () => {
                 viewBox="0 0 24 24"
                 strokeWidth={1.5}
                 stroke="currentColor"
-                className="w-6 h-6 text-[#371A16] hover:text-[#5a2e1a] transition-colors"
+                className="w-5 h-5"
               >
                 <path
                   strokeLinecap="round"
@@ -169,30 +160,30 @@ export const Login = () => {
           </button>
         </div>
 
-        <div className="mt-4 flex w-full justify-between">
+        <div className="mb-6 flex justify-between items-center text-sm">
           <div className="flex items-center">
             <input
               type="checkbox"
-              name="rememberMe"
               id="rememberMe"
-              className="mr-2 rounded focus:ring-[#371A16]"
+              className="mr-2 rounded focus:ring-[#3B82F6]"
             />
-            <label htmlFor="rememberMe" className="text-sm">
+            <label htmlFor="rememberMe" className="text-gray-600">
               Nhớ tài khoản
             </label>
           </div>
           <Link
             to="/forgot"
-            className="text-[#371A16] font-medium hover:font-bold transition-all"
+            className="text-[#3B82F6] font-medium hover:underline"
           >
-            Quên mật khẩu
+            Quên mật khẩu?
           </Link>
         </div>
 
-        <div className="mt-6 flex justify-center">
+        <div className="flex justify-center">
           <button
             type="submit"
-            className="w-[200px] h-[50px] bg-[#371A16] text-white font-bold rounded-md hover:bg-white hover:text-[#371A16] shadow-md transition-all duration-300 transform hover:scale-105"
+            className="w-[200px] py-2 bg-[#3B82F6] text-white font-semibold rounded-md hover:bg-[#2563EB] transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            aria-label="Đăng nhập"
           >
             Đăng nhập
           </button>
