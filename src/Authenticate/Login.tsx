@@ -6,7 +6,8 @@ export const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -16,18 +17,22 @@ export const Login = () => {
   }, [navigate]);
 
   const validateForm = () => {
+    let isValid = true;
+    setUsernameError("");
+    setPasswordError("");
+
     if (!/^[a-zA-Z0-9_]{4,20}$/.test(username)) {
-      setError("Tên tài khoản phải từ 4-20 ký tự, chỉ chứa chữ, số và dấu gạch dưới");
-      return false;
+      setUsernameError("Tên tài khoản phải từ 4-20 ký tự, chỉ chứa chữ, số và dấu gạch dưới");
+      isValid = false;
     }
     if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,20}$/.test(password)) {
-      setError("Mật khẩu phải từ 8-20 ký tự, chứa ít nhất 1 chữ hoa, 1 chữ thường, 1 số và 1 ký tự đặc biệt");
-      return false;
+      setPasswordError("Mật khẩu phải từ 8-20 ký tự, chứa ít nhất 1 chữ hoa, 1 chữ thường, 1 số và 1 ký tự đặc biệt");
+      isValid = false;
     }
-    return true;
+    return isValid;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: { preventDefault: () => void; }) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -46,7 +51,7 @@ export const Login = () => {
         navigate("/dashboard");
       })
       .catch((err) => {
-        setError("Đăng nhập thất bại: " + err.message);
+        setUsernameError("Đăng nhập thất bại: " + err.message);
       });
   };
 
@@ -66,9 +71,9 @@ export const Login = () => {
           </Link>
         </p>
 
-        {error && (
+        {(usernameError || passwordError) && (
           <div className="bg-[#EF4444]/10 text-[#EF4444] p-2 rounded mb-4 text-sm text-center">
-            {error}
+            {usernameError || passwordError}
           </div>
         )}
 
@@ -86,8 +91,11 @@ export const Login = () => {
           <input
             type="text"
             id="username"
-            className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] transition-all"
-            onChange={(e) => setUsername(e.target.value)}
+            className={`w-full px-3 py-2 text-sm rounded-md border ${usernameError ? "border-red-500" : "border-gray-300"} focus:outline-none focus:ring-2 focus:ring-[#3B82F6] transition-all`}
+            onChange={(e) => {
+              setUsername(e.target.value);
+              setUsernameError("");
+            }}
             value={username}
             required
             aria-label="Tài khoản"
@@ -108,9 +116,11 @@ export const Login = () => {
           <input
             type={showPassword ? "text" : "password"}
             id="password"
-
-            className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] transition-all pr-10"
-            onChange={(e) => setPassword(e.target.value)}
+            className={`w-full px-3 py-2 text-sm rounded-md border ${passwordError ? "border-red-500" : "border-gray-300"} focus:outline-none focus:ring-2 focus:ring-[#3B82F6] transition-all pr-10`}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setPasswordError("");
+            }}
             value={password}
             required
             aria-label="Mật khẩu"

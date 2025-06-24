@@ -1,28 +1,10 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from 'react-toastify';
+import { toast } from "react-toastify";
 import { getToken } from "../../services/localStorageService";
 
-interface OrderItem {
-    id: number;
-    productId: number;
-    productName: string;
-    quantity: number;
-    price: number;
-}
-
-interface Order {
-    id: number;
-    userName: string;
-    totalAmount: number;
-    status: string;
-    shippingAddress: string;
-    paymentMethod: string;
-    shipmentMethod: string;
-    orderNote: string;
-    createdDate: string;
-    orderItems: OrderItem[];
-}
+// Import interface từ types.ts
+import { Order } from "../../services/types";
 
 interface OrderFormProps {
     order: Order;
@@ -44,9 +26,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onSubmit, onCancel, title 
 
     const statusOptions = [
         { value: "Pending", label: "Chờ xử lý" },
-        { value: "Processing", label: "Đang xử lý" },
+        { value: "Paid", label: "Đã thanh toán" },
         { value: "Shipped", label: "Đã giao" },
-        { value: "Delivered", label: "Đã nhận" },
         { value: "Cancelled", label: "Đã hủy" },
     ];
 
@@ -79,20 +60,21 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onSubmit, onCancel, title 
         return true;
     }, [formData]);
 
-    const handleSubmit = useCallback((e: React.FormEvent) => {
-        e.preventDefault();
-        if (!validateForm()) return;
-        onSubmit(formData);
-    }, [formData, onSubmit, validateForm]);
+    const handleSubmit = useCallback(
+        (e: React.FormEvent) => {
+            e.preventDefault();
+            if (!validateForm()) return;
+            onSubmit(formData);
+        },
+        [formData, onSubmit, validateForm]
+    );
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
             <div className="bg-white p-6 rounded-lg w-full max-w-md sm:max-w-lg shadow-xl">
                 <h2 className="text-xl font-bold text-[#1A202C] mb-4">{title}</h2>
                 {error && (
-                    <div className="bg-red-100 text-[#E53E3E] p-2 rounded mb-4 text-sm">
-                        {error}
-                    </div>
+                    <div className="bg-red-100 text-[#E53E3E] p-2 rounded mb-4 text-sm">{error}</div>
                 )}
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
@@ -167,22 +149,63 @@ const OrderDetailsModal: React.FC<{ order: Order; onClose: () => void }> = ({ or
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
             <div className="bg-white p-6 rounded-lg w-full max-w-2xl shadow-xl">
-                <h2 className="text-xl font-bold text-[#1A202C] mb-4">Chi tiết đơn hàng #{order.id}</h2>
+                <h2 className="text-xl font-bold text-[#1A202C] mb-4">Chi tiết đơn hàng #{order.orderNumber}</h2>
                 <div className="space-y-3">
-                    <p><strong className="text-[#2C5282]">Tên khách hàng:</strong> {order.userName || "Không có"}</p>
-                    <p><strong className="text-[#2C5282]">Tổng tiền:</strong> {order.totalAmount.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' })}</p>
-                    <p><strong className="text-[#2C5282]">Trạng thái:</strong> {order.status}</p>
-                    <p><strong className="text-[#2C5282]">Địa chỉ giao hàng:</strong> {order.shippingAddress}</p>
-                    <p><strong className="text-[#2C5282]">Phương thức thanh toán:</strong> {order.paymentMethod}</p>
-                    <p><strong className="text-[#2C5282]">Phương thức vận chuyển:</strong> {order.shipmentMethod}</p>
-                    <p><strong className="text-[#2C5282]">Ghi chú đơn hàng:</strong> {order.orderNote || "Không có"}</p>
-                    <p><strong className="text-[#2C5282]">Ngày tạo:</strong> {new Date(order.createdDate).toLocaleString('vi-VN')}</p>
+                    <p>
+                        <strong className="text-[#2C5282]">Mã đơn hàng:</strong> {order.orderNumber}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Tên khách hàng:</strong> {order.userName || "Không có"}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Tổng tiền:</strong>{" "}
+                        {order.totalAmount.toLocaleString("vi-VN", { style: "currency", currency: "VND" })}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Lợi nhuận:</strong>{" "}
+                        {order.totalProfit.toLocaleString("vi-VN", { style: "currency", currency: "VND" })}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Trạng thái:</strong> {order.status}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Địa chỉ giao hàng:</strong> {order.shippingAddress}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Phương thức thanh toán:</strong> {order.paymentMethod}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Phương thức vận chuyển:</strong> {order.shipmentMethod}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Ghi chú đơn hàng:</strong> {order.orderNote || "Không có"}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Người tạo:</strong> {order.createdBy || "Không có"}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Ngày tạo:</strong>{" "}
+                        {new Date(order.createdDate).toLocaleString("vi-VN")}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Người sửa cuối:</strong> {order.lastModifiedBy || "Không có"}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Ngày sửa cuối:</strong>{" "}
+                        {order.lastModifiedDate
+                            ? new Date(order.lastModifiedDate).toLocaleString("vi-VN")
+                            : "Chưa sửa"}
+                    </p>
+                    <p>
+                        <strong className="text-[#2C5282]">Đã xóa:</strong> {order.isDeleted ? "Có" : "Không"}
+                    </p>
                     <div>
                         <strong className="text-[#2C5282]">Sản phẩm:</strong>
                         <ul className="list-disc pl-5 mt-1 text-[#1A202C]">
                             {order.orderItems.map((item) => (
                                 <li key={item.id}>
-                                    {item.productName} (x{item.quantity}) - {item.price.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' })}
+                                    {item.productName} (x{item.quantity}) -{" "}
+                                    {item.salePrice.toLocaleString("vi-VN", { style: "currency", currency: "VND" })}
                                 </li>
                             ))}
                         </ul>
@@ -210,11 +233,18 @@ export const ManageOrder: React.FC = () => {
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState<boolean>(false);
-    const [sortField, setSortField] = useState<keyof Order | "">("");
-    const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
     const [searchTerm, setSearchTerm] = useState<string>("");
+    const [searchField, setSearchField] = useState<"userName" | "orderNumber">("userName");
+    const [filterStatus, setFilterStatus] = useState<string>("");
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [itemsPerPage] = useState<number>(10);
+
+    const statusOptions = [
+        { value: "Pending", label: "Chờ xử lý" },
+        { value: "Paid", label: "Đã thanh toán" },
+        { value: "Shipped", label: "Đã giao" },
+        { value: "Cancelled", label: "Đã hủy" },
+    ];
 
     const checkAdmin = async (accessToken: string) => {
         try {
@@ -350,22 +380,19 @@ export const ManageOrder: React.FC = () => {
         if (!isLoading && !isAdmin) navigate("/");
     }, [isLoading, isAdmin, navigate]);
 
-    // Pagination logic
-    const filteredOrders = orders.filter((order) =>
-        (order.userName ?? "").toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const sortedOrders = [...filteredOrders].sort((a, b) => {
-        if (!sortField) return 0;
-        const aValue = a[sortField] || "";
-        const bValue = b[sortField] || "";
-        return sortDirection === "asc"
-            ? aValue.toString().localeCompare(bValue.toString())
-            : bValue.toString().localeCompare(aValue.toString());
+    // Search and filter logic
+    const filteredOrders = orders.filter((order) => {
+        const searchLower = searchTerm.toLowerCase();
+        const matchesSearch =
+            searchField === "userName"
+                ? (order.userName ?? "").toLowerCase().includes(searchLower)
+                : order.orderNumber.toString().includes(searchLower);
+        const matchesStatus = !filterStatus || order.status === filterStatus;
+        return matchesSearch && matchesStatus;
     });
 
-    const totalPages = Math.ceil(sortedOrders.length / itemsPerPage);
-    const paginatedOrders = sortedOrders.slice(
+    const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+    const paginatedOrders = filteredOrders.slice(
         (currentPage - 1) * itemsPerPage,
         currentPage * itemsPerPage
     );
@@ -417,49 +444,95 @@ export const ManageOrder: React.FC = () => {
             <h1 className="text-2xl font-bold text-[#1A202C] mb-4">Quản lý đơn hàng</h1>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-4 sm:space-y-0">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
-                    <input
-                        type="text"
-                        placeholder="Tìm kiếm đơn hàng..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="border border-gray-300 px-3 py-2 rounded-md w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
-                    />
+                    <div className="flex flex-col w-full sm:w-auto">
+                        <input
+                            type="text"
+                            placeholder={`Tìm kiếm theo ${searchField === "userName" ? "tên khách hàng" : "mã đơn hàng"}...`}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="border border-gray-300 px-3 py-2 rounded-md w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
+                        />
+                        <div className="flex space-x-4 mt-2">
+                            <label className="flex items-center space-x-1">
+                                <input
+                                    type="radio"
+                                    name="searchField"
+                                    value="userName"
+                                    checked={searchField === "userName"}
+                                    onChange={() => setSearchField("userName")}
+                                    className="form-radio h-4 w-4 text-[#3182CE]"
+                                />
+                                <span className="text-sm text-[#1A202C]">Tên khách hàng</span>
+                            </label>
+                            <label className="flex items-center space-x-1">
+                                <input
+                                    type="radio"
+                                    name="searchField"
+                                    value="orderNumber"
+                                    checked={searchField === "orderNumber"}
+                                    onChange={() => setSearchField("orderNumber")}
+                                    className="form-radio h-4 w-4 text-[#3182CE]"
+                                />
+                                <span className="text-sm text-[#1A202C]">Mã đơn hàng</span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
                 <select
-                    value={sortField}
-                    onChange={(e) => {
-                        setSortField(e.target.value as keyof Order);
-                        setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
-                    }}
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
                     className="border border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200 w-full sm:w-auto"
                 >
-                    <option value="">-- Sắp xếp theo --</option>
-                    <option value="userName">Tên khách hàng {sortDirection === "asc" ? "↑" : "↓"}</option>
-                    <option value="status">Trạng thái {sortDirection === "asc" ? "↑" : "↓"}</option>
+                    <option value="">-- Lọc theo trạng thái --</option>
+                    {statusOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                            {option.label}
+                        </option>
+                    ))}
                 </select>
             </div>
             <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
                 <table className="min-w-full border border-gray-200">
                     <thead>
                         <tr className="bg-[#2C5282] text-white text-sm uppercase tracking-wider">
-                            <th className="py-3 px-4 border-b border-gray-200 text-center w-16 sm:w-20">STT</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-center">Ngày tạo</th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center w-16 sm:w-20">
+                                STT
+                            </th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-left">Mã đơn</th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-left">Ngày tạo</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-left">Tên khách hàng</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-left">Tổng tiền</th>
                             <th className="py-3 px-4 border-b border-gray-200 text-left">Trạng thái</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-center w-24 sm:w-32">Hành động</th>
+                            <th className="py-3 px-4 border-b border-gray-200 text-center w-24 sm:w-32">
+                                Hành động
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
                         {isLoading ? (
                             Array.from({ length: itemsPerPage }).map((_, index) => (
                                 <tr key={index}>
-                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
-                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
-                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
-                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
-                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
-                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
+                                    </td>
                                 </tr>
                             ))
                         ) : paginatedOrders.length > 0 ? (
@@ -469,7 +542,12 @@ export const ManageOrder: React.FC = () => {
                                     className={`border-b border-gray-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"
                                         } hover:bg-[#EDF2F7] transition-colors duration-200`}
                                 >
-                                    <td className="py-3 px-4 text-center text-[#1A202C]">{(currentPage - 1) * itemsPerPage + index + 1}</td>
+                                    <td className="py-3 px-4 text-center text-[#1A202C]">
+                                        {(currentPage - 1) * itemsPerPage + index + 1}
+                                    </td>
+                                    <td className="py-3 px-4 text-start text-[#1A202C]">
+                                        {order.orderNumber}
+                                    </td>
                                     <td className="py-3 px-4 text-[#1A202C]">
                                         {order.createdDate
                                             ? new Date(order.createdDate).toLocaleString("vi-VN", {
@@ -481,15 +559,23 @@ export const ManageOrder: React.FC = () => {
                                             }).replace(/,/, "")
                                             : "N/A"}
                                     </td>
-                                    {/* <td className="py-3 px-4 text-[#1A202C]"></td> */}
-
-                                    <td className="py-3 px-4 text-[#1A202C]">{order.userName}</td>
-                                    <td className="py-3 px-4 text-[#1A202C]">{order.totalAmount.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' })}</td>
-                                    <td className="py-3 px-4 text-[#1A202C]">{order.status}</td>
-                                    <td className="py-3 px-4 text-center">
+                                    <td className="py-3 px-4 text-start text-[#1A202C]">{order.userName}</td>
+                                    <td className="py-3 px-4 text-start text-[#1A202C]">
+                                        {order.totalAmount.toLocaleString("vi-VN", {
+                                            style: "currency",
+                                            currency: "VND",
+                                        })}
+                                    </td>
+                                    <td className="py-3 px-4 text-start text-[#1A202C]">
+                                        <span className={`status-badge status-${order.status.toLowerCase()}`}>
+                                            {statusOptions.find((option) => option.value === order.status)?.label ||
+                                                order.status}
+                                        </span>
+                                    </td>
+                                    <td className="py-3 px-4 text-start">
                                         <button
                                             onClick={() => handleViewOrder(order)}
-                                            className="text-[#3182CE] hover:text-[#2C5282] transition-colors duration-200 mr-2 sm:mr-4"
+                                            className="text-green-600 hover:text-green-500 hover:font-bold transition-colors duration-200 mr-2 sm:mr-4"
                                             title="Xem chi tiết"
                                         >
                                             <svg
@@ -534,7 +620,7 @@ export const ManageOrder: React.FC = () => {
                                         </button>
                                         <button
                                             onClick={() => handleDeleteOrder(order.id)}
-                                            className="text-[#E53E3E] hover:text-red-700 transition-colors duration-200"
+                                            className="text-red-500 hover:text-red-700 transition-colors duration-200"
                                             title="Xóa"
                                         >
                                             <svg
@@ -557,7 +643,7 @@ export const ManageOrder: React.FC = () => {
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={6} className="py-3 px-4 text-center text-[#1A202C]">
+                                <td colSpan={7} className="py-3 px-4 text-start text-[#1A202C]">
                                     Không có đơn hàng
                                 </td>
                             </tr>
@@ -566,66 +652,55 @@ export const ManageOrder: React.FC = () => {
                 </table>
             </div>
 
-            {
-                totalPages > 1 && (
-                    <div className="flex justify-center mt-4 space-x-2">
+            {totalPages > 1 && (
+                <div className="flex justify-center mt-4 space-x-2">
+                    <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className={`px-3 py-1 rounded-md ${currentPage === 1
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
+                            } transition-all duration-200`}
+                    >
+                        Trước
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                         <button
-                            onClick={() => handlePageChange(currentPage - 1)}
-                            disabled={currentPage === 1}
-                            className={`px-3 py-1 rounded-md ${currentPage === 1
-                                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                                : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
+                            key={page}
+                            onClick={() => handlePageChange(page)}
+                            className={`px-3 py-1 rounded-md ${currentPage === page
+                                ? "bg-[#3182CE] text-white"
+                                : "bg-white text-[#1A202C] hover:bg-[#EDF2F7]"
                                 } transition-all duration-200`}
                         >
-                            Trước
+                            {page}
                         </button>
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                            <button
-                                key={page}
-                                onClick={() => handlePageChange(page)}
-                                className={`px-3 py-1 rounded-md ${currentPage === page
-                                    ? "bg-[#3182CE] text-white"
-                                    : "bg-white text-[#1A202C] hover:bg-[#EDF2F7]"
-                                    } transition cubiert
+                    ))}
+                    <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className={`px-3 py-1 rounded-md ${currentPage === totalPages
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
+                            } transition-all duration-200`}
+                    >
+                        Sau
+                    </button>
+                </div>
+            )}
 
-                            all duration-200`}
-                            >
-                                {page}
-                            </button>
-                        ))}
-                        <button
-                            onClick={() => handlePageChange(currentPage + 1)}
-                            disabled={currentPage === totalPages}
-                            className={`px-3 py-1 rounded-md ${currentPage === totalPages
-                                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                                : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
-                                } transition-all duration-200`}
-                        >
-                            Sau
-                        </button>
-                    </div>
-                )
-            }
+            {isEditModalOpen && selectedOrder && (
+                <OrderForm
+                    order={selectedOrder}
+                    onSubmit={handleUpdateOrder}
+                    onCancel={() => setIsEditModalOpen(false)}
+                    title="Chỉnh sửa đơn hàng"
+                />
+            )}
 
-            {
-                isEditModalOpen && selectedOrder && (
-                    <OrderForm
-                        order={selectedOrder}
-                        onSubmit={handleUpdateOrder}
-                        onCancel={() => setIsEditModalOpen(false)}
-                        title="Chỉnh sửa đơn hàng"
-                    />
-                )
-            }
-
-            {
-                isViewModalOpen && selectedOrder && (
-                    <OrderDetailsModal
-                        order={selectedOrder}
-                        onClose={() => setIsViewModalOpen(false)}
-                    />
-                )
-            }
-        </div >
+            {isViewModalOpen && selectedOrder && (
+                <OrderDetailsModal order={selectedOrder} onClose={() => setIsViewModalOpen(false)} />
+            )}
+        </div>
     );
 };

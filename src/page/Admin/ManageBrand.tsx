@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from 'react-toastify';
 import { getToken } from "../../services/localStorageService";
 
 interface Brand {
@@ -14,16 +15,16 @@ interface BrandFormProps {
     title: string;
 }
 
-const BrandForm: React.FC<BrandFormProps> = ({ brand, onSubmit, onCancel, title }) => {
+const BrandForm: React.FC<BrandFormProps> = React.memo(({ brand, onSubmit, onCancel, title }) => {
     const [formData, setFormData] = useState<Brand>({ ...brand });
     const [error, setError] = useState<string | null>(null);
 
-    const handleInputChange = (field: keyof Brand, value: string) => {
+    const handleInputChange = useCallback((field: keyof Brand, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
         setError(null);
-    };
+    }, []);
 
-    const validateForm = () => {
+    const validateForm = useCallback(() => {
         if (!formData.name || formData.name.trim().length < 2) {
             setError("Tên thương hiệu phải có ít nhất 2 ký tự");
             return false;
@@ -33,33 +34,26 @@ const BrandForm: React.FC<BrandFormProps> = ({ brand, onSubmit, onCancel, title 
             return false;
         }
         return true;
-    };
+    }, [formData.name]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = useCallback((e: React.FormEvent) => {
         e.preventDefault();
         if (!validateForm()) return;
         onSubmit(formData);
-    };
+    }, [formData, onSubmit, validateForm]);
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-            <div className="bg-white p-6 rounded-lg w-full max-w-md sm:max-w-lg shadow-xl">
-                <h2
-                    className="text-xl font-bold text-[#1A202C] mb-4"
-                >
-                    {title}
-                </h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 overflow-y-auto z-50">
+            <div className="bg-white p-6 rounded-lg w-full max-w-3xl shadow-xl">
+                <h2 className="text-xl font-bold text-[#1A202C] mb-4">{title}</h2>
                 {error && (
-                    <div className="bg-red-100 text-[#E53E3E] p-2 rounded mb-4 text-sm">
-                        {error}
-                    </div>
+                    <div className="bg-red-100 text-[#E53E3E] p-2 rounded mb-4 text-sm">{error}</div>
                 )}
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                         <label
                             htmlFor="name"
-                            className={`block text-sm font-medium text-[#1A202C] transition-all duration-300 ${formData.name ? "text-[#2C5282] font-semibold" : ""
-                                }`}
+                            className={`block text-sm font-medium text-[#1A202C] ${formData.name ? 'text-[#2C5282] font-semibold' : ''}`}
                         >
                             Tên thương hiệu <span className="text-[#E53E3E]">*</span>
                         </label>
@@ -91,7 +85,7 @@ const BrandForm: React.FC<BrandFormProps> = ({ brand, onSubmit, onCancel, title 
             </div>
         </div>
     );
-};
+});
 
 export const ManageBrand: React.FC = () => {
     const navigate = useNavigate();
@@ -103,19 +97,23 @@ export const ManageBrand: React.FC = () => {
     const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
     const [sortField, setSortField] = useState<keyof Brand | "">("");
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [searchTerm, setSearchTerm] = useState<string>("");
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [itemsPerPage] = useState<number>(10);
+    const API_URL = "http://localhost:8080/datn";
 
-    const checkAdmin = async (accessToken: string) => {
+    const checkAdmin = useCallback(async (accessToken: string) => {
         try {
-            const response = await fetch("http://localhost:8080/datn/users/myInfo", {
+            const response = await fetch(`${API_URL}/users/myInfo`, {
                 method: "GET",
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) throw new Error("Không thể kiểm tra quyền admin");
-
             const data = await response.json();
             if (data.result?.roles?.some((role: { name: string }) => role.name === "ADMIN")) {
                 setIsAdmin(true);
@@ -126,17 +124,19 @@ export const ManageBrand: React.FC = () => {
             console.error("Error checking admin status:", err);
             setError(err.message || "Có lỗi xảy ra khi kiểm tra quyền admin");
         }
-    };
+    }, [navigate]);
 
-    const getAllBrands = async (accessToken: string) => {
+    const getAllBrands = useCallback(async (accessToken: string) => {
         try {
-            const response = await fetch("http://localhost:8080/datn/brand", {
+            const response = await fetch(`${API_URL}/brand`, {
                 method: "GET",
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) throw new Error("Không thể lấy danh sách thương hiệu");
-
             const data = await response.json();
             const brandsData: Brand[] = Array.isArray(data.result) ? data.result : data.result.data || [];
             setBrands(brandsData);
@@ -144,39 +144,44 @@ export const ManageBrand: React.FC = () => {
             console.error("Error fetching brands:", err);
             setError(err.message || "Có lỗi xảy ra khi tải danh sách thương hiệu");
         }
-    };
+    }, [navigate]);
 
-    const handleEditBrand = (brand: Brand) => {
+    const handleEditBrand = useCallback((brand: Brand) => {
         setSelectedBrand(brand);
         setIsEditModalOpen(true);
-    };
+    }, []);
 
-    const handleDeleteBrand = async (brandId: number) => {
+    const handleDeleteBrand = useCallback(async (brandId: number) => {
         if (!window.confirm("Bạn có chắc muốn xóa thương hiệu này?")) return;
         try {
-            const accessToken = getToken();
-            const response = await fetch(`http://localhost:8080/datn/brand/${brandId}`, {
+            const accessToken = await getToken();
+            if (!accessToken) throw new Error("Access token not found");
+            const response = await fetch(`${API_URL}/brand/${brandId}`, {
                 method: "DELETE",
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.message || "Không thể xóa thương hiệu");
             }
-
             setBrands(brands.filter((b) => b.id !== brandId));
-            setError(null);
+            setSearchTerm("");
+            toast.success("Xóa thương hiệu thành công!");
         } catch (err: any) {
             console.error("Error deleting brand:", err);
-            setError(err.message || "Có lỗi xảy ra khi xóa thương hiệu");
+            toast.error(err.message || "Có lỗi xảy ra khi xóa thương hiệu");
         }
-    };
+    }, [brands, navigate]);
 
-    const handleCreateBrandSubmit = async (formData: Brand) => {
+    const handleCreateBrandSubmit = useCallback(async (formData: Brand) => {
         try {
-            const accessToken = getToken();
-            const response = await fetch(`http://localhost:8080/datn/brand`, {
+            const accessToken = await getToken();
+            if (!accessToken) throw new Error("Access token not found");
+            const response = await fetch(`${API_URL}/brand`, {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
@@ -184,27 +189,30 @@ export const ManageBrand: React.FC = () => {
                 },
                 body: JSON.stringify(formData),
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.message || "Không thể tạo thương hiệu");
             }
-
             const newBrand = await response.json();
             setBrands([...brands, newBrand.result || newBrand]);
             setIsCreateModalOpen(false);
             setSelectedBrand(null);
-            setError(null);
+            toast.success("Tạo thương hiệu thành công!");
         } catch (err: any) {
             console.error("Error creating brand:", err);
-            setError(err.message || "Có lỗi xảy ra khi tạo thương hiệu");
+            toast.error(err.message || "Có lỗi xảy ra khi tạo thương hiệu");
         }
-    };
+    }, [brands, navigate]);
 
-    const handleUpdateBrand = async (formData: Brand) => {
+    const handleUpdateBrand = useCallback(async (formData: Brand) => {
         try {
-            const accessToken = getToken();
-            const response = await fetch(`http://localhost:8080/datn/brand/${formData.id}`, {
+            const accessToken = await getToken();
+            if (!accessToken) throw new Error("Access token not found");
+            const response = await fetch(`${API_URL}/brand/${formData.id}`, {
                 method: "PUT",
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
@@ -212,42 +220,53 @@ export const ManageBrand: React.FC = () => {
                 },
                 body: JSON.stringify(formData),
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.message || "Không thể cập nhật thương hiệu");
             }
-
             const updatedBrand = await response.json();
             setBrands(brands.map((b) => (b.id === updatedBrand.result.id ? updatedBrand.result : b)));
             setIsEditModalOpen(false);
             setSelectedBrand(null);
-            setError(null);
+            toast.success("Cập nhật thương hiệu thành công!");
         } catch (err: any) {
             console.error("Error updating brand:", err);
-            setError(err.message || "Có lỗi xảy ra khi cập nhật thương hiệu");
+            toast.error(err.message || "Có lỗi xảy ra khi cập nhật thương hiệu");
         }
-    };
+    }, [brands, navigate]);
 
     useEffect(() => {
         const fetchData = async () => {
-            const accessToken = getToken();
+            const accessToken = await getToken();
             if (!accessToken) {
                 navigate("/login");
                 return;
             }
-            await Promise.all([checkAdmin(accessToken), getAllBrands(accessToken)]);
-            setIsLoading(false);
+            setIsLoading(true);
+            try {
+                await Promise.all([checkAdmin(accessToken), getAllBrands(accessToken)]);
+            } catch (err: any) {
+                setError(err.message || "Có lỗi xảy ra khi tải dữ liệu");
+            } finally {
+                setIsLoading(false);
+            }
         };
-
         fetchData();
-    }, [navigate]);
+    }, [navigate, checkAdmin, getAllBrands]);
 
     useEffect(() => {
-        if (!isLoading && !isAdmin) navigate("/");
+        if (!isLoading && !isAdmin) navigate("/home");
     }, [isLoading, isAdmin, navigate]);
 
-    // Pagination logic
+    useEffect(() => {
+        setSortDirection('asc');
+    }, [sortField]);
+
+    // Filter and sort brands
     const filteredBrands = brands.filter((brand) =>
         brand.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -256,7 +275,9 @@ export const ManageBrand: React.FC = () => {
         if (!sortField) return 0;
         const aValue = a[sortField] || "";
         const bValue = b[sortField] || "";
-        return aValue.toString().localeCompare(bValue.toString());
+        return sortDirection === 'asc'
+            ? aValue.toString().localeCompare(bValue.toString())
+            : bValue.toString().localeCompare(aValue.toString());
     });
 
     const totalPages = Math.ceil(sortedBrands.length / itemsPerPage);
@@ -265,9 +286,9 @@ export const ManageBrand: React.FC = () => {
         currentPage * itemsPerPage
     );
 
-    const handlePageChange = (page: number) => {
+    const handlePageChange = useCallback((page: number) => {
         setCurrentPage(page);
-    };
+    }, []);
 
     if (isLoading) {
         return (
@@ -302,7 +323,7 @@ export const ManageBrand: React.FC = () => {
                             setSelectedBrand(newBrand);
                             setIsCreateModalOpen(true);
                         }}
-                        className="bg-[#2C5282] text-white px-4 py-2 rounded-md hover:bg-[#3182CE] transition-all duration-200 w-full sm:w-auto"
+                        className="w-full sm:w-auto bg-[#2C5282] text-white px-4 py-2 rounded-md hover:bg-[#3182CE] transition-all duration-200"
                     >
                         + Tạo thương hiệu mới
                     </button>
@@ -311,85 +332,125 @@ export const ManageBrand: React.FC = () => {
                         placeholder="Tìm kiếm thương hiệu..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="border border-gray-300 px-3 py-2 rounded-md w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
+                        className="w-full sm:w-64 border text-sm border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
                     />
                 </div>
-                <select
-                    value={sortField}
-                    onChange={(e) => setSortField(e.target.value as keyof Brand)}
-                    className="border border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200 w-full sm:w-auto"
-                >
-                    <option value="">-- Sắp xếp theo --</option>
-                    <option value="name">Tên thương hiệu</option>
-                </select>
+                <div className="flex flex-col space-y-2">
+                    <div>
+                        <label className="block text-sm font-medium text-[#1A202C] mb-1">Sắp xếp theo</label>
+                        <select
+                            value={sortField}
+                            onChange={(e) => setSortField(e.target.value as keyof Brand | "")}
+                            className="w-full sm:w-48 border text-sm border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
+                        >
+                            <option value="">-- Chọn kiểu sắp xếp --</option>
+                            <option value="name">Tên thương hiệu</option>
+                        </select>
+                    </div>
+                    <div className="flex space-x-4">
+                        <label className="inline-flex items-center">
+                            <input
+                                type="radio"
+                                name="sortDirection"
+                                value="asc"
+                                checked={sortDirection === 'asc'}
+                                onChange={() => setSortDirection('asc')}
+                                className="form-radio h-4 w-4 text-[#3182CE] focus:ring-[#3182CE]"
+                            />
+                            <span className="ml-2 text-sm text-[#1A202C]">Tăng</span>
+                        </label>
+                        <label className="inline-flex items-center">
+                            <input
+                                type="radio"
+                                name="sortDirection"
+                                value="desc"
+                                checked={sortDirection === 'desc'}
+                                onChange={() => setSortDirection('desc')}
+                                className="form-radio h-4 w-4 text-[#3182CE] focus:ring-[#3182CE]"
+                            />
+                            <span className="ml-2 text-sm text-[#1A202C]">Giảm</span>
+                        </label>
+                    </div>
+                </div>
             </div>
-            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
-                <table className="min-w-full border border-gray-200">
+            <div className="overflow-x-auto bg-white rounded-lg shadow-md">
+                <table className="w-full border border-gray-200">
                     <thead>
-                        <tr className="bg-[#2C5282] text-white text-sm uppercase tracking-wider">
-                            <th className="py-3 px-4 border-b border-gray-200 text-center w-16 sm:w-20">ID</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-left">Tên thương hiệu</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-center w-24 sm:w-32">Hành động</th>
+                        <tr className="bg-gray-100 text-[#1A202C] text-sm uppercase tracking-wider">
+                            <th className="py-3 px-4 border-b text-center w-16 sm:w-20">STT</th>
+                            <th className="py-3 px-4 border-b text-center">Tên thương hiệu</th>
+                            <th className="py-3 px-4 border-b text-center w-32">Hành động</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {paginatedBrands.length > 0 ? (
-                            paginatedBrands.map((brand, index) => (
+                        {isLoading ? (
+                            Array.from({ length: itemsPerPage }).map((_, idx) => (
+                                <tr key={idx}>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                </tr>
+                            ))
+                        ) : paginatedBrands.length > 0 ? (
+                            paginatedBrands.map((brand, idx) => (
                                 <tr
                                     key={brand.id}
-                                    className={`border-b border-gray-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                                        } hover:bg-[#EDF2F7] transition-colors duration-200`}
+                                    className={`border-b ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-gray-100 transition-colors duration-200`}
                                 >
-                                    <td className="py-3 px-4 text-center text-[#1A202C]">{brand.id}</td>
-                                    <td className="py-3 px-4 text-[#1A202C] truncate">{brand.name}</td>
+                                    <td className="py-3 px-4 text-center text-[#1A202C]">
+                                        {(currentPage - 1) * itemsPerPage + idx + 1}
+                                    </td>
+                                    <td className="py-3 px-4 text-[#1A202C] text-center truncate">{brand.name}</td>
                                     <td className="py-3 px-4 text-center">
-                                        <button
-                                            onClick={() => handleEditBrand(brand)}
-                                            className="text-[#3182CE] hover:text-[#2C5282] transition-colors duration-200 mr-2 sm:mr-4"
-                                            title="Chỉnh sửa"
-                                        >
-                                            <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                strokeWidth="1.5"
-                                                stroke="currentColor"
-                                                className="w-5 h-5"
+                                        <div className="flex justify-center items-center space-x-2">
+                                            <button
+                                                onClick={() => handleEditBrand(brand)}
+                                                className="text-blue-500 hover:text-blue-600 transition-colors duration-200"
+                                                title="Chỉnh sửa"
                                             >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
-                                                />
-                                            </svg>
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteBrand(brand.id)}
-                                            className="text-[#E53E3E] hover:text-red-700 transition-colors duration-200"
-                                            title="Xóa"
-                                        >
-                                            <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                strokeWidth="1.5"
-                                                stroke="currentColor"
-                                                className="w-5 h-5"
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    strokeWidth="1.5"
+                                                    stroke="currentColor"
+                                                    className="w-5 h-5"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7m-1.5-4.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                                                    />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteBrand(brand.id)}
+                                                className="text-red-500 hover:text-red-600 transition-colors duration-200"
+                                                title="Xóa"
                                             >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
-                                                />
-                                            </svg>
-                                        </button>
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    strokeWidth="1.5"
+                                                    stroke="currentColor"
+                                                    className="w-5 h-5"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        d="M6 18L18 6M6 6l12 12"
+                                                    />
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={3} className="py-3 px-4 text-center text-[#1A202C]">
-                                    Không có thương hiệu
+                                <td colSpan={3} className="py-3 px-4 text-center text-[#666]">
+                                    Không tìm thấy thương hiệu
                                 </td>
                             </tr>
                         )}
@@ -397,16 +458,12 @@ export const ManageBrand: React.FC = () => {
                 </table>
             </div>
 
-            {/* Pagination */}
             {totalPages > 1 && (
                 <div className="flex justify-center mt-4 space-x-2">
                     <button
                         onClick={() => handlePageChange(currentPage - 1)}
                         disabled={currentPage === 1}
-                        className={`px-3 py-1 rounded-md ${currentPage === 1
-                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                            : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
-                            } transition-all duration-200`}
+                        className={`px-3 py-1 rounded-md text-sm ${currentPage === 1 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'} transition-colors duration-200`}
                     >
                         Trước
                     </button>
@@ -414,10 +471,7 @@ export const ManageBrand: React.FC = () => {
                         <button
                             key={page}
                             onClick={() => handlePageChange(page)}
-                            className={`px-3 py-1 rounded-md ${currentPage === page
-                                ? "bg-[#3182CE] text-white"
-                                : "bg-white text-[#1A202C] hover:bg-[#EDF2F7]"
-                                } transition-all duration-200`}
+                            className={`px-3 py-1 rounded-md text-sm ${currentPage === page ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'} transition-all duration-200 border border-gray-200`}
                         >
                             {page}
                         </button>
@@ -425,10 +479,7 @@ export const ManageBrand: React.FC = () => {
                     <button
                         onClick={() => handlePageChange(currentPage + 1)}
                         disabled={currentPage === totalPages}
-                        className={`px-3 py-1 rounded-md ${currentPage === totalPages
-                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                            : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
-                            } transition-all duration-200`}
+                        className={`px-3 py-1 rounded-md text-sm ${currentPage === totalPages ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'} transition-colors duration-200`}
                     >
                         Sau
                     </button>

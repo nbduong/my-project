@@ -12,36 +12,64 @@ export const Signup = () => {
         name: "",
     });
 
-    const [error, setError] = useState("");
+    const [usernameError, setUsernameError] = useState("");
+    const [passwordError, setPasswordError] = useState("");
+    const [confirmPasswordError, setConfirmPasswordError] = useState("");
+    const [emailError, setEmailError] = useState("");
+    const [nameError, setNameError] = useState("");
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
-        setError("");
+        // Xóa lỗi tương ứng khi người dùng nhập lại
+        switch (name) {
+            case "username":
+                setUsernameError("");
+                break;
+            case "password":
+                setPasswordError("");
+                break;
+            case "confirmPassword":
+                setConfirmPasswordError("");
+                break;
+            case "email":
+                setEmailError("");
+                break;
+            case "name":
+                setNameError("");
+                break;
+        }
     };
 
     const validateForm = () => {
+        let isValid = true;
+        setUsernameError("");
+        setPasswordError("");
+        setConfirmPasswordError("");
+        setEmailError("");
+        setNameError("");
+
         if (!/^[a-zA-Z0-9_]{6,20}$/.test(formData.username)) {
-            setError("Tên tài khoản phải từ 6-20 ký tự, chỉ chứa chữ, số và dấu gạch dưới");
-            return false;
+            setUsernameError("Tên tài khoản phải từ 6-20 ký tự, chỉ chứa chữ, số và dấu gạch dưới");
+            isValid = false;
         }
         if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,20}$/.test(formData.password)) {
-            setError("Mật khẩu phải từ 8-20 ký tự, chứa ít nhất 1 chữ hoa, 1 chữ thường, 1 số và 1 ký tự đặc biệt");
-            return false;
+            setPasswordError("Mật khẩu phải từ 8-20 ký tự, chứa ít nhất 1 chữ hoa, 1 chữ thường, 1 số và 1 ký tự đặc biệt");
+            isValid = false;
         }
         if (formData.password !== formData.confirmPassword) {
-            setError("Mật khẩu và xác nhận mật khẩu không khớp");
-            return false;
+            setConfirmPasswordError("Mật khẩu và xác nhận mật khẩu không khớp");
+            isValid = false;
         }
         if (!/^\S+@\S+\.\S+$/.test(formData.email)) {
-            setError("Email không đúng định dạng");
-            return false;
+            setEmailError("Email không đúng định dạng");
+            isValid = false;
         }
         if (!/^[a-zA-Z\s]{2,50}$/.test(formData.name)) {
-            setError("Họ tên phải từ 2-50 ký tự, chỉ chứa chữ cái và khoảng trắng");
-            return false;
+            setNameError("Họ tên phải từ 2-50 ký tự, chỉ chứa chữ cái và khoảng trắng");
+            isValid = false;
         }
-        return true;
+        return isValid;
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -66,7 +94,7 @@ export const Signup = () => {
                 navigate("/login");
             })
             .catch((err) => {
-                setError("Đăng ký thất bại: " + err.message);
+                setUsernameError("Đăng ký thất bại: " + err.message);
             });
     };
 
@@ -86,18 +114,18 @@ export const Signup = () => {
                     </Link>
                 </p>
 
-                {error && (
+                {(usernameError || passwordError || confirmPasswordError || emailError || nameError) && (
                     <div className="bg-[#EF4444]/10 text-[#EF4444] p-2 rounded mb-4 text-sm text-center">
-                        {error}
+                        {usernameError || passwordError || confirmPasswordError || emailError || nameError}
                     </div>
                 )}
 
                 {[
-                    { label: "Tên tài khoản", name: "username", type: "text" },
-                    { label: "Mật khẩu", name: "password", type: "password" },
-                    { label: "Xác nhận mật khẩu", name: "confirmPassword", type: "password" },
-                    { label: "Email", name: "email", type: "email" },
-                    { label: "Họ tên", name: "name", type: "text" },
+                    { label: "Tên tài khoản", name: "username", type: "text", error: usernameError },
+                    { label: "Mật khẩu", name: "password", type: "password", error: passwordError },
+                    { label: "Xác nhận mật khẩu", name: "confirmPassword", type: "password", error: confirmPasswordError },
+                    { label: "Email", name: "email", type: "email", error: emailError },
+                    { label: "Họ tên", name: "name", type: "text", error: nameError },
                 ].map((field) => (
                     <div key={field.name} className="mb-6 relative">
                         <label
@@ -116,7 +144,7 @@ export const Signup = () => {
                             value={formData[field.name as keyof typeof formData]}
                             onChange={handleChange}
                             required
-                            className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] transition-all"
+                            className={`w-full px-3 py-2 text-sm rounded-md border ${field.error ? "border-red-500" : "border-gray-300"} focus:outline-none focus:ring-2 focus:ring-[#3B82F6] transition-all`}
                         />
                     </div>
                 ))}

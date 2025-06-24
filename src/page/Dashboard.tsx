@@ -1,17 +1,16 @@
-
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Slider from 'react-slick';
-import { toast } from 'react-toastify';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
+import { toast } from 'react-toastify';
 
 interface Product {
   id: string;
   name: string;
   productCode: string;
-  price: number;
+  salePrice: number;
   quantity: number;
   brandName: string;
   categoryName: string;
@@ -32,9 +31,6 @@ interface Category {
   name: string;
 }
 
-interface OutletContext {
-  addToCart: (product: Product) => void;
-}
 
 
 const API_URL = 'http://localhost:8080/datn';
@@ -43,8 +39,7 @@ const API_URL = 'http://localhost:8080/datn';
 export const ProductCard: React.FC<{
   product: Product;
   onClick: (id: string) => void;
-  addToCart: (product: Product) => void;
-}> = ({ product, onClick, addToCart }) => {
+}> = ({ product, onClick }) => {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -70,7 +65,7 @@ export const ProductCard: React.FC<{
       />
       <h3 className="text-sm font-semibold text-[#1F2937] line-clamp-2">{product.name}</h3>
       <p className="text-xs text-gray-500 mt-1">Code: {product.productCode}</p>
-      <p className="text-base font-semibold text-[#1F2937] mt-1">{product.price.toLocaleString()} VNĐ</p>
+      <p className="text-base font-semibold text-[#1F2937] mt-1">{product.salePrice.toLocaleString()} VNĐ</p>
       <div className="mt-auto flex items-center justify-between">
         <div className="text-xs flex items-center">
           {product.quantity > 0 ? (
@@ -87,18 +82,12 @@ export const ProductCard: React.FC<{
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (product.quantity > 0) {
-              addToCart(product);
-              toast.success(`${product.name} added to cart`);
-            } else {
-              toast.error('Product is out of stock');
-            }
+            onClick(product.id);
           }}
-          disabled={product.quantity === 0}
-          className="flex items-center px-3 py-1 bg-[#3B82F6] text-white text-xs rounded hover:bg-[#2563EB] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-          aria-label={`Add ${product.name} to cart`}
+          className="flex items-center px-3 py-1 bg-[#3B82F6] text-white text-xs rounded hover:bg-[#2563EB] transition-colors"
+          aria-label={`View details for ${product.name}`}
         >
-          Add to Cart
+          Xem chi tiết
         </button>
       </div>
     </div>
@@ -218,7 +207,6 @@ const getCategoryIcon = (categoryName: string) => {
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { addToCart } = useOutletContext<OutletContext>();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -401,8 +389,9 @@ export const Dashboard: React.FC = () => {
                   alt={banner.headline}
                   className="absolute inset-0 w-full h-full object-cover"
                   onError={(e) => { e.currentTarget.src = '/avatar.png'; }}
+                  onClick={() => navigate(banner.ctaLink)}
                 />
-                <div className="absolute inset-0 bg-black bg-opacity-40 flex flex-col items-center justify-center text-white p-4">
+                {/* <div className="absolute inset-0 bg-black bg-opacity-40 flex flex-col items-center justify-center text-white p-4">
                   <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-center">{banner.headline}</h2>
                   <button
                     onClick={() => navigate(banner.ctaLink)}
@@ -411,7 +400,7 @@ export const Dashboard: React.FC = () => {
                   >
                     {banner.ctaText}
                   </button>
-                </div>
+                </div> */}
               </div>
             ))}
           </Slider>
@@ -421,7 +410,7 @@ export const Dashboard: React.FC = () => {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
               {products.slice(0, 9).map((product) => (
-                <ProductCard key={product.id} product={product} onClick={handleProductClick} addToCart={addToCart} />
+                <ProductCard key={product.id} product={product} onClick={handleProductClick} />
               ))}
             </div>
             {products.length > 9 && (
@@ -443,12 +432,12 @@ export const Dashboard: React.FC = () => {
           <h3 className="text-xl font-bold text-[#1F2937] mb-4 flex items-center border-b-2 border-gray-200">
             {getCategoryIcon(category)} {category}
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {categoryProducts.slice(0, 9).map((product) => (
-              <ProductCard key={product.id} product={product} onClick={handleProductClick} addToCart={addToCart} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+            {categoryProducts.slice(0, 8).map((product) => (
+              <ProductCard key={product.id} product={product} onClick={handleProductClick} />
             ))}
           </div>
-          {categoryProducts.length > 9 && (
+          {categoryProducts.length > 8 && (
             <div className="text-center mt-4">
               <button
                 className="px-4 py-2 bg-[#3B82F6] text-white rounded hover:bg-[#2563EB] transition-colors"

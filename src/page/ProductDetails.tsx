@@ -1,6 +1,5 @@
-
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import axios, { AxiosError } from "axios";
 import { toast } from "react-toastify";
 import { saveCart } from "../services/localStorageService";
@@ -11,7 +10,7 @@ interface Product {
     name: string;
     productCode: string;
     description: string | null;
-    price: number;
+    salePrice: number; // Thay đổi từ price sang salePrice
     quantity: number;
     brandName: string;
     categoryName: string;
@@ -19,7 +18,7 @@ interface Product {
     specifications: { [key: string]: string };
     status: string; // 0: Hết hàng, 1: Hàng sẵn có
     viewCount: number;
-    isDeleted: boolean; // Added to filter out deleted products
+    isDeleted: boolean;
 }
 
 interface CartItem {
@@ -27,11 +26,17 @@ interface CartItem {
     quantity: number;
 }
 
+// Interface for OutletContext
+interface OutletContext {
+    addToCart: (product: Product, quantity: number) => void;
+}
+
 const API_URL = "http://localhost:8080/datn";
 
 export default function ProductDetails() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const { addToCart } = useOutletContext<OutletContext>();
     const [product, setProduct] = useState<Product | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -70,7 +75,10 @@ export default function ProductDetails() {
                 const response = await axios.get(`${API_URL}/products/${id}`, {
                     signal: controller.signal,
                 });
-                const fetchedProduct = response.data.result;
+                const fetchedProduct = response.data.result; // Lấy từ result
+                if (!fetchedProduct) {
+                    throw new Error("Không tìm thấy sản phẩm trong response.");
+                }
                 setProduct(fetchedProduct);
                 setMainImage(`${API_URL}/${fetchedProduct.images[0] || "/avatar.png"}`);
                 incrementViewCount();
@@ -81,7 +89,7 @@ export default function ProductDetails() {
                     setError("Không tìm thấy sản phẩm.");
                 } else if (error.response?.status === 401 || error.response?.status === 403) {
                     toast.error("Vui lòng đăng nhập để xem sản phẩm.");
-                    navigate('/login', { state: { from: `/product/${id}` } });
+                    navigate("/login", { state: { from: `/product/${id}` } });
                 } else {
                     setError(error.message || "Có lỗi xảy ra khi tải sản phẩm.");
                 }
@@ -129,8 +137,8 @@ export default function ProductDetails() {
             lastScrollY.current = currentScrollY;
         };
 
-        window.addEventListener('scroll', handleScroll);
-        return () => window.removeEventListener('scroll', handleScroll);
+        window.addEventListener("scroll", handleScroll);
+        return () => window.removeEventListener("scroll", handleScroll);
     }, []);
 
     // Focus first thumbnail on load
@@ -146,36 +154,51 @@ export default function ProductDetails() {
         );
     };
 
-    const addToCartLogic = useCallback((navigateToCart: boolean = false) => {
-        if (!product) return;
-        if (product.status === "0") {
-            toast.error("Sản phẩm hiện đã hết hàng!");
-            return;
-        }
-        if (quantity > product.quantity) {
-            toast.error(`Chỉ còn ${product.quantity} sản phẩm trong kho!`);
-            return;
-        }
-        const cartItem: CartItem = { product, quantity };
-        const existingCart: CartItem[] = JSON.parse(localStorage.getItem("cart") || "[]");
-        const existingItemIndex = existingCart.findIndex(item => item.product.id === product.id);
-        let updatedCart: CartItem[];
-        if (existingItemIndex !== -1) {
-            updatedCart = [...existingCart];
-            updatedCart[existingItemIndex].quantity += quantity;
-            if (updatedCart[existingItemIndex].quantity > product.quantity) {
-                updatedCart[existingItemIndex].quantity = product.quantity;
-                toast.warn(`Đã cập nhật số lượng, nhưng chỉ còn ${product.quantity} sản phẩm trong kho!`);
+    const addToCartLogic = useCallback(
+        (navigateToCart: boolean = false) => {
+            if (!product) return;
+            if (product.status === "0") {
+                toast.error("Sản phẩm hiện đã hết hàng!");
+                return;
             }
-        } else {
-            updatedCart = [...existingCart, cartItem];
-        }
-        saveCart(updatedCart);
-        toast.success(`Đã thêm ${quantity} ${product.name} vào giỏ hàng!`);
-        if (navigateToCart) {
-            navigate("/cart", { state: { product, quantity } });
-        }
-    }, [product, quantity, navigate]);
+
+            // Kiểm tra số lượng hợp lệ
+            const existingCart: CartItem[] = JSON.parse(localStorage.getItem("cart") || "[]");
+            const existingItemIndex = existingCart.findIndex((item) => item.product.id === product.id);
+            let newQuantity = quantity;
+
+            if (existingItemIndex !== -1) {
+                newQuantity = existingCart[existingItemIndex].quantity + quantity;
+                if (newQuantity > product.quantity) {
+                    toast.error(`Không thể thêm! Chỉ còn ${product.quantity} sản phẩm trong kho.`);
+                    return;
+                }
+            } else if (quantity > product.quantity) {
+                toast.error(`Không thể thêm! Chỉ còn ${product.quantity} sản phẩm trong kho.`);
+                return;
+            }
+
+            // Sử dụng addToCart từ context để cập nhật trạng thái toàn cục
+            addToCart(product, quantity);
+            toast.success(`Đã thêm ${quantity} ${product.name} vào giỏ hàng!`);
+
+            // Đồng bộ với localStorage
+            let updatedCart: CartItem[];
+            if (existingItemIndex !== -1) {
+                updatedCart = [...existingCart];
+                updatedCart[existingItemIndex].quantity = newQuantity;
+            } else {
+                const cartItem: CartItem = { product, quantity };
+                updatedCart = [...existingCart, cartItem];
+            }
+            saveCart(updatedCart);
+
+            if (navigateToCart) {
+                navigate("/cart", { state: { product, quantity } });
+            }
+        },
+        [product, quantity, navigate, addToCart]
+    );
 
     const handleAddToCart = useCallback(() => addToCartLogic(), [addToCartLogic]);
     const handleBuyNow = useCallback(() => addToCartLogic(true), [addToCartLogic]);
@@ -200,13 +223,13 @@ export default function ProductDetails() {
         let shareUrl = "";
         switch (platform) {
             case "facebook":
-                shareUrl = `https://www.facebook.com`;
+                shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`;
                 break;
             case "twitter":
-                shareUrl = `https://twitter.com`;
+                shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
                 break;
             case "whatsapp":
-                shareUrl = `https://wa.me`;
+                shareUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
                 break;
         }
         window.open(shareUrl, "_blank", "noopener,noreferrer");
@@ -226,25 +249,6 @@ export default function ProductDetails() {
 
     return (
         <div className="container mx-auto p-4 sm:p-6 bg-[#F3F4F6] min-h-screen">
-            {/* Breadcrumb */}
-            <nav className="text-sm mb-4">
-                <ol className="list-none p-0 inline-flex">
-                    <li className="flex items-center">
-                        <Link to="/" className="text-[#3B82F6] hover:underline">Trang chủ</Link>
-                        <svg className="fill-current w-3 h-3 mx-2 text-[#1F2937]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512" aria-hidden="true">
-                            <path d="M285.476 272.971L91.132 467.314c-9.373 9.373-24.569 9.373-33.941 0l-22.667-22.667c-9.357-9.357-9.375-24.522-.04-33.901L188.505 256 34.484 101.255c-9.335-9.379-9.317-24.544.04-33.901l22.667-22.667c9.373-9.373 24.569-9.373 33.941 0L285.475 239.03c9.373 9.372 9.373 24.568.001 33.941z" />
-                        </svg>
-                    </li>
-                    <li className="flex items-center">
-                        <Link to={`/products?categoryName=${product.categoryName}`} className="text-[#3B82F6] hover:underline">{product.categoryName}</Link>
-                        <svg className="fill-current w-3 h-3 mx-2 text-[#1F2937]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512" aria-hidden="true">
-                            <path d="M285.476 272.971L91.132 467.314c-9.373 9.373-24.569 9.373-33.941 0l-22.667-22.667c-9.357-9.357-9.375-24.522-.04-33.901L188.505 256 34.484 101.255c-9.335-9.379-9.317-24.544.04-33.901l22.667-22.667c9.373-9.373 24.569-9.373 33.941 0L285.475 239.03c9.373 9.372 9.373 24.568.001 33.941z" />
-                        </svg>
-                    </li>
-                    <li className="text-[#1F2937]">{product.name}</li>
-                </ol>
-            </nav>
-
             {/* Main Product Section */}
             <div className="flex flex-col lg:flex-row gap-8 bg-white p-4 sm:p-6 rounded-lg shadow-md">
                 {/* Image Section */}
@@ -254,11 +258,25 @@ export default function ProductDetails() {
                             src={mainImage}
                             alt={`${product.name} (${product.categoryName}) - Hình ảnh chính`}
                             className={`w-full h-64 sm:h-96 object-cover rounded-lg mb-4 transition-opacity duration-300 ${isFading ? "opacity-0" : "opacity-100"} group-hover:scale-105 transform transition-transform duration-300`}
-                            onError={(e) => { e.currentTarget.src = "/avatar.png"; }}
+                            onError={(e) => {
+                                e.currentTarget.src = "/avatar.png";
+                            }}
                         />
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black bg-opacity-20 rounded-lg">
-                            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            <svg
+                                className="w-10 h-10 text-white"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                ></path>
                             </svg>
                         </div>
                     </div>
@@ -269,7 +287,9 @@ export default function ProductDetails() {
                                 src={`${API_URL}/${img || "/avatar.png"}`}
                                 alt={`${product.name} (${product.categoryName}) - Hình ảnh ${index + 1}`}
                                 className="w-20 h-20 object-cover rounded-md cursor-pointer hover:opacity-80 transition-opacity duration-200 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-                                onError={(e) => { e.currentTarget.src = "/avatar.png"; }}
+                                onError={(e) => {
+                                    e.currentTarget.src = "/avatar.png";
+                                }}
                                 onClick={() => handleThumbnailClick(img)}
                                 ref={index === 0 ? thumbnailRef : null}
                                 tabIndex={0}
@@ -281,26 +301,40 @@ export default function ProductDetails() {
                 {/* Product Info Section */}
                 <div className="lg:w-1/2">
                     <h1 className="text-2xl sm:text-3xl font-bold text-[#1E3A8A] mb-3">{product.name}</h1>
-                    <p className="text-[#EF4444] text-2xl sm:text-3xl font-bold mb-4">{product.price.toLocaleString()}đ</p>
-                    <div className="flex flex-wrap items-center gap-4 text-[#1F2937] mb-4">
-                        <span>Thương hiệu: <span className="font-bold">{product.brandName}</span></span>
+                    <p className="text-[#EF4444] text-2xl sm:text-3xl font-bold mb-4">
+                        {product.salePrice.toLocaleString()}đ
+                    </p>
+                    <div className="flex justify-between items-center gap-4 text-[#1F2937] mb-4">
+                        <span className="flex">Thương hiệu: <span className="font-bold">{product.brandName}</span></span>
                         <span className="hidden sm:inline">|</span>
-                        <span>Tình trạng: {getStatusText(product.status)}</span>
+                        <span className="flex" >Tình trạng: {getStatusText(product.status)}</span>
                         <span className="hidden sm:inline">|</span>
                         <div className="flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" className="size-6">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                strokeWidth="1.5"
+                                stroke="currentColor"
+                                className="size-6"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"
+                                />
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+                                />
                             </svg>
-
                             <span>{product.viewCount} lượt xem</span>
                         </div>
                     </div>
 
                     {product.status === "1" && product.quantity <= 2 && (
-                        <p className="text-[#EF4444] font-semibold mb-4">
-                            Chỉ còn {product.quantity} sản phẩm!
-                        </p>
+                        <p className="text-[#EF4444] font-semibold mb-4">Chỉ còn {product.quantity} sản phẩm!</p>
                     )}
 
                     <div className="mb-6">
@@ -339,7 +373,9 @@ export default function ProductDetails() {
                         <h2 className="text-lg font-semibold text-[#1F2937] mb-2">Thông số kỹ thuật</h2>
                         <ul className="list-disc list-inside text-[#1F2937]">
                             {Object.entries(product.specifications).map(([key, value]) => (
-                                <li key={key} className="mb-1">{key}: {value}</li>
+                                <li key={key} className="mb-1">
+                                    {key}: {value}
+                                </li>
                             ))}
                         </ul>
                     </div>
@@ -369,7 +405,12 @@ export default function ProductDetails() {
                             className="p-2 bg-[#3B82F6] text-white rounded-full hover:bg-[#2563EB] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                             aria-label="Chia sẻ trên Facebook"
                         >
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <svg
+                                className="w-5 h-5"
+                                fill="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
                                 <path d="M24 12a12 12 0 1 0-13.9 11.9v-8.4h-3V12h3V9.7c0-3 1.8-4.7 4.5-4.7 1.3 0 2.6.2 2.6.2v2.9h-1.5c-1.5 0-1.9.7-1.9 1.9V12h3.3l-.5 3.4h-2.8v8.4A12 12 0 0 0 24 12z" />
                             </svg>
                         </button>
@@ -378,7 +419,12 @@ export default function ProductDetails() {
                             className="p-2 bg-[#1DA1F2] text-white rounded-full hover:bg-[#1A91DA] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                             aria-label="Chia sẻ trên Twitter"
                         >
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <svg
+                                className="w-5 h-5"
+                                fill="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
                                 <path d="M23.4 4.8a9.5 9.5 0 0 1-2.7.7 4.7 4.7 0 0 0 2-2.6 9.5 9.5 0 0 1-3 .1 4.7 4.7 0 0 0-8 4.3A13.3 13.3 0 0 1 1.6 2.5a4.7 4.7 0 0 0 1.5 6.3A4.7 4.7 0 0 1 .9 8v.1a4.7 4.7 0 0 0 3.8 4.6 4.7 4.7 0 0 1-2.1.1 4.7 4.7 0 0 0 4.4 3.3 9.5 9.5 0 0 1-5.9 2 9.5 9.5 0 0 1-1.1-.1 13.3 13.3 0 0 0 7.2 2.1c8.6 0 13.3-7.1 13.3-13.3 0-.2 0-.4-.1-.6a9.5 9.5 0 0 0 2.3-2.4z" />
                             </svg>
                         </button>
@@ -387,7 +433,12 @@ export default function ProductDetails() {
                             className="p-2 bg-[#25D366] text-white rounded-full hover:bg-[#20BD57] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                             aria-label="Chia sẻ trên WhatsApp"
                         >
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <svg
+                                className="w-5 h-5"
+                                fill="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
                                 <path d="M12 0a12 12 0 0 0-12 12c0 2.5.8 4.9 2.2 6.9L0 24l5.2-1.6A12 12 0 0 0 24 12 12 12 0 0 0 12 0zm6.6 17.6c-.3.8-1.5 1.5-2.3 1.7-1 .2-2.3.1-3.6-.5-1.5-.7-3-1.8-4.2-3.1-.9-.9-1.7-2-2-3.2-.3-1.2 0-2.4.6-3.3.3-.5.7-.8 1.2-.8h.4c.4 0 .8.2 1.1.6.4.5 1.2 1.5 1.3 1.6.1.2.2.4.1.6-.1.2-.3.5-.5.7-.2.2-.4.4-.5.6-.2.2-.2.5 0 .7.5.8 1.2 1.5 2 2.2.8.6 1.6 1.1 2.5 1.4.2.1.4.1.6-.1.2-.2.5-.4.7-.6.2-.2.4-.2.6-.1.2.1 1.2.6 1.5.7.3.2.5.3.6.5.1.2.1.6-.1.9z" />
                             </svg>
                         </button>
@@ -434,16 +485,22 @@ export default function ProductDetails() {
                                 onClick={() => navigate(`/product/${relatedProduct.id}`)}
                                 className="border border-gray-200 rounded-lg shadow-md p-4 bg-white hover:shadow-lg transition-shadow duration-200 cursor-pointer flex flex-col h-full focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                                 tabIndex={0}
-                                onKeyDown={(e) => e.key === 'Enter' && navigate(`/product/${relatedProduct.id}`)}
+                                onKeyDown={(e) => e.key === "Enter" && navigate(`/product/${relatedProduct.id}`)}
                             >
                                 <img
                                     src={`${API_URL}/${relatedProduct.images[0] || "/avatar.png"}`}
                                     alt={`${relatedProduct.name} (${relatedProduct.categoryName})`}
                                     className="w-full h-40 object-cover rounded-md mb-2"
-                                    onError={(e) => { e.currentTarget.src = "/avatar.png"; }}
+                                    onError={(e) => {
+                                        e.currentTarget.src = "/avatar.png";
+                                    }}
                                 />
-                                <h3 className="text-sm text-[#1F2937] font-semibold line-clamp-2">{relatedProduct.name}</h3>
-                                <p className="text-lg font-semibold text-[#1F2937] mt-1">{relatedProduct.price.toLocaleString()}đ</p>
+                                <h3 className="text-sm text-[#1F2937] font-semibold line-clamp-2">
+                                    {relatedProduct.name}
+                                </h3>
+                                <p className="text-lg font-semibold text-[#1F2937] mt-1">
+                                    {relatedProduct.salePrice.toLocaleString()}đ
+                                </p>
                                 <div className="mt-auto flex items-center justify-between">
                                     <div className="text-xs text-[#10B981] flex items-center">
                                         <svg
@@ -473,7 +530,7 @@ export default function ProductDetails() {
             {/* Sticky Add to Cart Button */}
             {product.status === "1" && (
                 <div
-                    className={`fixed bottom-4 sm:bottom-16 left-1/2 transform -translate-x-1/2 bg-white p-4 rounded-lg shadow-lg flex items-center gap-4 z-50 transition-opacity duration-300 ${showSticky ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    className={`fixed bottom-4 sm:bottom-16 left-1/2 transform -translate-x-1/2 bg-white p-4 rounded-lg shadow-lg flex items-center gap-4 z-50 transition-opacity duration-300 ${showSticky ? "opacity-100" : "opacity-0 pointer-events-none"
                         }`}
                 >
                     <button

@@ -9,7 +9,7 @@ interface Product {
     id: string;
     name: string;
     productCode: string;
-    price: number;
+    salePrice: number;
     quantity: number;
     brandName: string;
     categoryName: string;
@@ -117,7 +117,6 @@ export default function ProductList() {
                                 key={product.id}
                                 product={product}
                                 onClick={handleProductClick}
-                                addToCart={addToCart}
                             />
                         ))}
                     </div>

@@ -9,16 +9,16 @@ export const getToken = () => {
 };
 
 export const removeToken = () => {
-  console.log("remove")
+  console.log("remove");
   return localStorage.removeItem(KEY_TOKEN);
 };
 
-
+// Cập nhật interface Product
 interface Product {
   id: string;
   name: string;
   productCode: string;
-  price: number;
+  salePrice: number; // Thay price bằng salePrice
   images: string[];
   brandName?: string;
   categoryName?: string;
@@ -68,7 +68,7 @@ export const saveCart = (cartItems: CartItem[]): void => {
         cartItems.every(
           (item) =>
             item.product &&
-            typeof item.product.id === 'string' && // Change from 'number' to 'string'
+            typeof item.product.id === 'string' &&
             typeof item.quantity === 'number' &&
             item.quantity > 0
         ))

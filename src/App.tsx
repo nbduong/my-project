@@ -21,6 +21,8 @@ import { Login } from "./Authenticate/Login";
 import { Signup } from "./Authenticate/Signup";
 import { Profile } from "./page/User/Profile";
 import { AdminDashboard } from "./page/Admin/AdminDashboard";
+import { ManageStockIn } from "./page/Admin/ManageStockIn";
+import { ManageDiscount } from "./page/Admin/ManageDiscount";
 
 function App() {
   return (
@@ -36,6 +38,8 @@ function App() {
           <Route path="/admin/brand" element={<ManageBrand />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/" element={<AdminDashboard />} />
+          <Route path="/admin/stockin" element={<ManageStockIn />} />
+          <Route path="/admin/discount" element={<ManageDiscount />} />
         </Route>
         <Route element={<Layout />}>
           <Route path="/user" element={<UserLayout />}>

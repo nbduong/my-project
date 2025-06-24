@@ -1,29 +1,16 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { toast } from 'react-toastify';
-import { clearCart, getToken } from '../services/localStorageService';
+import { useEffect, useState, useCallback } from "react";
+import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
+import axios from "axios";
+import { toast } from "react-toastify";
+import { clearCart, getToken } from "../services/localStorageService";
 
-const API_URL = 'http://localhost:8080/datn';
-const SHIPPING_COST = 30000;
+// Import từ types.ts
+import { Product, CartItem, UserInfo } from "../services/types"; // Thay bằng đường dẫn thực tế nếu khác
+import { API_URL, SHIPPING_COST } from "../services/constants"; // Tạo file constants.ts nếu chưa có
 
-interface Product {
-    id: string;
-    name: string;
-    price: number;
-    images: string[];
-    categoryName?: string;
-}
-
-interface CartItem {
-    product: Product;
-    quantity: number;
-}
-
-interface UserInfo {
-    id: string;
-    username: string;
-    address?: string;
+interface OutletContext {
+    addToCart: (product: Product, quantity: number) => void;
+    clearCartState: () => void;
 }
 
 export function CheckoutPage() {
@@ -32,29 +19,29 @@ export function CheckoutPage() {
     const token = getToken();
 
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-    const [shippingAddress, setShippingAddress] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState('cash');
-    const [shippingMethod, setShippingMethod] = useState('viettelpost');
-    const [orderNote, setOrderNote] = useState('');
+    const [shippingAddress, setShippingAddress] = useState("");
+    const [paymentMethod, setPaymentMethod] = useState("cash");
+    const [shippingMethod, setShippingMethod] = useState("viettelpost");
+    const [orderNote, setOrderNote] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [addressError, setAddressError] = useState('');
-
+    const [addressError, setAddressError] = useState("");
+    const { clearCartState } = useOutletContext<OutletContext>();
     const cartItems: CartItem[] = location.state?.cartItems || [];
     const totalAmount: number = location.state?.totalPrice || 0;
 
     // Validate cart items
     useEffect(() => {
         if (!cartItems.length) {
-            toast.error('Giỏ hàng trống. Vui lòng thêm sản phẩm.');
-            navigate('/cart');
+            toast.error("Giỏ hàng trống. Vui lòng thêm sản phẩm.");
+            navigate("/cart");
         }
     }, [cartItems, navigate]);
 
     // Fetch user info
     useEffect(() => {
         if (!token) {
-            toast.error('Vui lòng đăng nhập để tiếp tục.');
-            navigate('/login', { state: { from: location.pathname } });
+            toast.error("Vui lòng đăng nhập để tiếp tục.");
+            navigate("/login", { state: { from: location.pathname } });
             return;
         }
 
@@ -69,18 +56,18 @@ export function CheckoutPage() {
                 setUserInfo({
                     id: data.id,
                     username: data.username,
-                    address: data.address || '',
+                    address: data.address || "",
                 });
-                setShippingAddress(data.address || '');
+                setShippingAddress(data.address || "");
             })
             .catch((err) => {
                 if (axios.isCancel(err)) return;
                 if (err.response?.status === 401) {
-                    toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-                    navigate('/login', { state: { from: location.pathname } });
+                    toast.error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
+                    navigate("/login", { state: { from: location.pathname } });
                 } else {
-                    toast.error('Lỗi khi tải thông tin người dùng.');
-                    navigate('/cart');
+                    toast.error("Lỗi khi tải thông tin người dùng.");
+                    navigate("/cart");
                 }
             })
             .finally(() => { });
@@ -91,11 +78,11 @@ export function CheckoutPage() {
     // Handle order submission
     const handleConfirmOrder = useCallback(async () => {
         if (!shippingAddress.trim()) {
-            setAddressError('Vui lòng nhập địa chỉ giao hàng.');
-            toast.error('Địa chỉ giao hàng là bắt buộc.');
+            setAddressError("Vui lòng nhập địa chỉ giao hàng.");
+            toast.error("Địa chỉ giao hàng là bắt buộc.");
             return;
         }
-        setAddressError('');
+        setAddressError("");
         setIsSubmitting(true);
 
         try {
@@ -104,7 +91,7 @@ export function CheckoutPage() {
                 {
                     userId: userInfo?.id,
                     userName: userInfo?.username,
-                    status: 'Chưa thanh toán',
+                    status: "Pending",
                     shippingAddress,
                     paymentMethod,
                     totalAmount: totalAmount + SHIPPING_COST,
@@ -118,25 +105,41 @@ export function CheckoutPage() {
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json',
+                        "Content-Type": "application/json",
                     },
                 }
             );
 
-            toast.success('Đặt hàng thành công!');
-            clearCart();
-            navigate('/');
+            toast.success("Đặt hàng thành công!");
+            try {
+                clearCart(); // Xóa giỏ hàng từ localStorage
+                clearCartState(); // Cập nhật trạng thái giỏ hàng
+            } catch (err) {
+                console.error("Lỗi khi xóa giỏ hàng:", err);
+            }
+            window.location.href = "/";
         } catch (err) {
             if (axios.isAxiosError(err) && err.response?.status === 401) {
-                toast.error('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-                navigate('/login', { state: { from: location.pathname } });
+                toast.error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.");
+                navigate("/login", { state: { from: location.pathname } });
             } else {
-                toast.error(axios.isAxiosError(err) ? err.message : 'Đặt hàng thất bại.');
+                toast.error(axios.isAxiosError(err) ? err.message : "Đặt hàng thất bại.");
             }
         } finally {
             setIsSubmitting(false);
         }
-    }, [userInfo, shippingAddress, paymentMethod, shippingMethod, orderNote, cartItems, totalAmount, token, navigate, location.pathname]);
+    }, [
+        userInfo,
+        shippingAddress,
+        paymentMethod,
+        shippingMethod,
+        orderNote,
+        cartItems,
+        totalAmount,
+        token,
+        navigate,
+        location.pathname,
+    ]);
 
     return (
         <div className="py-8 px-4 container mx-auto bg-gray-100 min-h-screen">
@@ -145,7 +148,13 @@ export function CheckoutPage() {
                 {/* Checkout Form */}
                 <div>
                     <h2 className="text-xl font-bold text-[#1E3A8A] mb-4">Thông tin thanh toán</h2>
-                    <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); handleConfirmOrder(); }}>
+                    <form
+                        className="space-y-6"
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            handleConfirmOrder();
+                        }}
+                    >
                         <div>
                             <label htmlFor="username" className="block font-medium text-[#1F2937] mb-1">
                                 Tên khách hàng
@@ -153,7 +162,7 @@ export function CheckoutPage() {
                             <input
                                 id="username"
                                 className="w-full border border-gray-300 px-3 py-2 rounded bg-gray-100 pointer-events-none"
-                                value={userInfo?.username || ''}
+                                value={userInfo?.username || ""}
                                 disabled
                                 aria-label="Tên khách hàng (không thể chỉnh sửa)"
                             />
@@ -164,15 +173,16 @@ export function CheckoutPage() {
                             </label>
                             <textarea
                                 id="shippingAddress"
-                                className={`w-full border ${addressError ? 'border-[#EF4444]' : 'border-gray-300'} px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6] resize-y`}
+                                className={`w-full border ${addressError ? "border-[#EF4444]" : "border-gray-300"
+                                    } px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#3B82F6] resize-y`}
                                 value={shippingAddress}
                                 onChange={(e) => {
                                     setShippingAddress(e.target.value);
-                                    setAddressError('');
+                                    setAddressError("");
                                 }}
                                 rows={3}
                                 placeholder="Nhập địa chỉ giao hàng..."
-                                aria-describedby={addressError ? 'address-error' : undefined}
+                                aria-describedby={addressError ? "address-error" : undefined}
                                 aria-label="Địa chỉ giao hàng"
                             />
                             {addressError && (
@@ -247,7 +257,7 @@ export function CheckoutPage() {
                             className="w-full mt-4 bg-[#3B82F6] text-white py-3 rounded-lg hover:bg-[#2563EB] disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                             aria-label="Xác nhận đơn hàng"
                         >
-                            {isSubmitting ? 'Đang xử lý...' : 'Xác nhận đơn hàng'}
+                            {isSubmitting ? "Đang xử lý..." : "Xác nhận đơn hàng"}
                         </button>
                     </form>
                 </div>
@@ -264,10 +274,12 @@ export function CheckoutPage() {
                                     className="flex items-center gap-4 py-3 border-b border-gray-200 last:border-b-0"
                                 >
                                     <img
-                                        src={`${API_URL}/${item.product.images?.[0] || 'avatar.png'}`}
-                                        alt={`${item.product.name} (${item.product.categoryName || 'Product'})`}
+                                        src={`${API_URL}/${item.product.images?.[0] || "avatar.png"}`}
+                                        alt={`${item.product.name} (${item.product.categoryName || "Product"})`}
                                         className="w-16 h-16 object-contain rounded-lg"
-                                        onError={(e) => { e.currentTarget.src = '/avatar.png'; }}
+                                        onError={(e) => {
+                                            e.currentTarget.src = "/avatar.png";
+                                        }}
                                     />
                                     <div className="flex-1">
                                         <h4 className="font-semibold text-[#1F2937] text-sm line-clamp-2">
@@ -275,7 +287,7 @@ export function CheckoutPage() {
                                         </h4>
                                         <p className="text-sm text-gray-600">Số lượng: {item.quantity}</p>
                                         <p className="text-sm text-gray-600">
-                                            Giá: {(item.product.price * item.quantity).toLocaleString()} VNĐ
+                                            Giá: {(item.product.salePrice * item.quantity).toLocaleString()} VNĐ {/* Thay price bằng salePrice */}
                                         </p>
                                     </div>
                                 </div>

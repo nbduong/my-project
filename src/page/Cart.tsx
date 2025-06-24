@@ -1,23 +1,11 @@
-import { useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { getToken, loadCart, saveCart } from '../services/localStorageService';
+import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { getToken, loadCart, saveCart } from "../services/localStorageService";
 
-interface Product {
-    id: string;
-    name: string;
-    productCode: string;
-    price: number;
-    images: string[];
-    brandName?: string;
-    categoryName?: string;
-}
+// Import từ types.ts nếu đã tạo
+import { Product, CartItem } from "../services/types";
 
-interface CartItem {
-    product: Product;
-    quantity: number;
-}
-
-const API_URL = 'http://localhost:8080/datn';
+const API_URL = "http://localhost:8080/datn";
 
 export function CartPage() {
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -31,7 +19,7 @@ export function CartPage() {
 
     // Remove item from cart
     const removeFromCart = (productId: string) => {
-        const updatedCart = cartItems.filter(item => item.product.id !== productId);
+        const updatedCart = cartItems.filter((item) => item.product.id !== productId);
         setCartItems(updatedCart);
         saveCart(updatedCart); // Use saveCart service for consistency
     };
@@ -39,7 +27,7 @@ export function CartPage() {
     // Update quantity of an item
     const updateQuantity = (productId: string, quantity: number) => {
         if (quantity < 1) return;
-        const updatedCart = cartItems.map(item =>
+        const updatedCart = cartItems.map((item) =>
             item.product.id === productId ? { ...item, quantity: Math.min(quantity, 999) } : item
         );
         setCartItems(updatedCart);
@@ -50,15 +38,16 @@ export function CartPage() {
     const getTotalItems = (): number => cartItems.reduce((total, item) => total + item.quantity, 0);
 
     // Calculate total price
-    const getTotalPrice = (): number => cartItems.reduce((total, item) => total + item.product.price * item.quantity, 0);
+    const getTotalPrice = (): number =>
+        cartItems.reduce((total, item) => total + item.product.salePrice * item.quantity, 0); // Thay price bằng salePrice
 
     const handlePayment = () => {
         const accessToken = getToken();
         if (!accessToken) {
-            navigate('/login', { state: { from: '/cart' } });
+            navigate("/login", { state: { from: "/cart" } });
             return;
         }
-        navigate('/checkout', { state: { cartItems, totalPrice: getTotalPrice() } });
+        navigate("/checkout", { state: { cartItems, totalPrice: getTotalPrice() } });
     };
 
     return (
@@ -83,16 +72,18 @@ export function CartPage() {
                                 className="flex items-center p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
                             >
                                 <img
-                                    src={`${API_URL}/${item.product.images?.[0] || 'avatar.png'}`}
+                                    src={`${API_URL}/${item.product.images?.[0] || "avatar.png"}`}
                                     alt={item.product.name}
                                     className="w-20 h-20 object-cover rounded-lg mr-4"
-                                    onError={(e) => { e.currentTarget.src = '/avatar.png'; }}
+                                    onError={(e) => {
+                                        e.currentTarget.src = "/avatar.png";
+                                    }}
                                 />
                                 <div className="flex-1">
                                     <h3 className="text-lg font-semibold text-gray-800">{item.product.name}</h3>
                                     <p className="text-sm text-gray-600">Mã: {item.product.productCode}</p>
                                     <p className="text-sm text-gray-600">
-                                        Đơn giá: {item.product.price.toLocaleString()} VNĐ
+                                        Đơn giá: {item.product.salePrice.toLocaleString()} VNĐ {/* Thay price bằng salePrice */}
                                     </p>
                                     <div className="flex items-center mt-2">
                                         <button
@@ -114,7 +105,7 @@ export function CartPage() {
                                     </div>
                                 </div>
                                 <div className="text-lg font-semibold text-gray-800">
-                                    {(item.product.price * item.quantity).toLocaleString()} VNĐ
+                                    {(item.product.salePrice * item.quantity).toLocaleString()} VNĐ {/* Thay price bằng salePrice */}
                                 </div>
                                 <button
                                     onClick={() => removeFromCart(item.product.id)}
