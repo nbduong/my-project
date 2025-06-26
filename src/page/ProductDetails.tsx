@@ -10,7 +10,11 @@ interface Product {
     name: string;
     productCode: string;
     description: string | null;
-    salePrice: number; // Thay đổi từ price sang salePrice
+    salePrice: number | null; // Allow null to handle backend issues
+    finalPrice?: number | null; // Added for discounted price
+    discountPercent?: number | null; // Added for percentage discount
+    discountAmount?: number | null; // Added for fixed amount discount
+    discountCode?: string | null; // Added for discount code
     quantity: number;
     brandName: string;
     categoryName: string;
@@ -75,9 +79,16 @@ export default function ProductDetails() {
                 const response = await axios.get(`${API_URL}/products/${id}`, {
                     signal: controller.signal,
                 });
-                const fetchedProduct = response.data.result; // Lấy từ result
+                const fetchedProduct = response.data.result;
                 if (!fetchedProduct) {
                     throw new Error("Không tìm thấy sản phẩm trong response.");
+                }
+                // Log for debugging
+                if (fetchedProduct.salePrice == null || fetchedProduct.finalPrice === null) {
+                    console.warn(`Invalid price for product ${id}:`, {
+                        salePrice: fetchedProduct.salePrice,
+                        finalPrice: fetchedProduct.finalPrice,
+                    });
                 }
                 setProduct(fetchedProduct);
                 setMainImage(`${API_URL}/${fetchedProduct.images[0] || "/avatar.png"}`);
@@ -115,6 +126,15 @@ export default function ProductDetails() {
                     signal: controller.signal,
                 });
                 const products = response.data.result.filter((p: Product) => p.id !== id && !p.isDeleted).slice(0, 4);
+                // Log for debugging
+                products.forEach((p: Product) => {
+                    if (p.salePrice == null || p.finalPrice === null) {
+                        console.warn(`Invalid price for related product ${p.id}:`, {
+                            salePrice: p.salePrice,
+                            finalPrice: p.finalPrice,
+                        });
+                    }
+                });
                 setRelatedProducts(products);
             } catch (err) {
                 if (!axios.isCancel(err)) {
@@ -217,23 +237,26 @@ export default function ProductDetails() {
         return lines.slice(0, 3).join("\n");
     };
 
-    const handleShare = useCallback((platform: string) => {
-        const url = window.location.href;
-        const text = `Xem sản phẩm ${product?.name} tại đây: ${url}`;
-        let shareUrl = "";
-        switch (platform) {
-            case "facebook":
-                shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`;
-                break;
-            case "twitter":
-                shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
-                break;
-            case "whatsapp":
-                shareUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-                break;
-        }
-        window.open(shareUrl, "_blank", "noopener,noreferrer");
-    }, [product?.name]);
+    const handleShare = useCallback(
+        (platform: string) => {
+            const url = window.location.href;
+            const text = `Xem sản phẩm ${product?.name} tại đây: ${url}`;
+            let shareUrl = "";
+            switch (platform) {
+                case "facebook":
+                    shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(text)}`; // Fixed typo
+                    break;
+                case "twitter":
+                    shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+                    break;
+                case "whatsapp":
+                    shareUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+                    break;
+            }
+            window.open(shareUrl, "_blank", "noopener,noreferrer");
+        },
+        [product?.name]
+    );
 
     if (isLoading) {
         return (
@@ -247,10 +270,20 @@ export default function ProductDetails() {
         return <p className="text-center text-[#1F2937] text-lg py-10">{error || "Không tìm thấy sản phẩm"}</p>;
     }
 
+    // Determine if the product is discounted
+    const isDiscounted =
+        product.finalPrice != null && product.salePrice != null && product.finalPrice < product.salePrice;
+
     return (
         <div className="container mx-auto p-4 sm:p-6 bg-[#F3F4F6] min-h-screen">
             {/* Main Product Section */}
-            <div className="flex flex-col lg:flex-row gap-8 bg-white p-4 sm:p-6 rounded-lg shadow-md">
+            <div className="flex flex-col lg:flex-row gap-8 bg-white p-4 sm:p-6 rounded-lg shadow-md relative">
+                {/* Sale Badge */}
+                {isDiscounted && (
+                    <span className="absolute top-4 right-4 bg-[#EF4444] text-white text-xs font-semibold px-2 py-1 rounded">
+                        Sale
+                    </span>
+                )}
                 {/* Image Section */}
                 <div className="lg:w-1/2">
                     <div className="relative group">
@@ -301,13 +334,28 @@ export default function ProductDetails() {
                 {/* Product Info Section */}
                 <div className="lg:w-1/2">
                     <h1 className="text-2xl sm:text-3xl font-bold text-[#1E3A8A] mb-3">{product.name}</h1>
-                    <p className="text-[#EF4444] text-2xl sm:text-3xl font-bold mb-4">
-                        {product.salePrice.toLocaleString()}đ
-                    </p>
+                    <div className="flex items-center gap-2 mb-4">
+                        {isDiscounted ? (
+                            <>
+                                <p className="text-2xl sm:text-3xl font-bold text-[#EF4444]">
+                                    {(product.finalPrice ?? product.salePrice ?? 0).toLocaleString()}đ
+                                </p>
+                                <p className="text-lg text-gray-500 line-through">
+                                    {(product.salePrice ?? 0).toLocaleString()}đ
+                                </p>
+                            </>
+                        ) : (
+                            <p className="text-2xl sm:text-3xl font-bold text-[#EF4444]">
+                                {(product.salePrice ?? 0).toLocaleString()}đ
+                            </p>
+                        )}
+                    </div>
                     <div className="flex justify-between items-center gap-4 text-[#1F2937] mb-4">
-                        <span className="flex">Thương hiệu: <span className="font-bold">{product.brandName}</span></span>
+                        <span className="flex">
+                            Thương hiệu: <span className="font-bold">{product.brandName}</span>
+                        </span>
                         <span className="hidden sm:inline">|</span>
-                        <span className="flex" >Tình trạng: {getStatusText(product.status)}</span>
+                        <span className="flex">Tình trạng: {getStatusText(product.status)}</span>
                         <span className="hidden sm:inline">|</span>
                         <div className="flex items-center">
                             <svg
@@ -405,12 +453,7 @@ export default function ProductDetails() {
                             className="p-2 bg-[#3B82F6] text-white rounded-full hover:bg-[#2563EB] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                             aria-label="Chia sẻ trên Facebook"
                         >
-                            <svg
-                                className="w-5 h-5"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                            >
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M24 12a12 12 0 1 0-13.9 11.9v-8.4h-3V12h3V9.7c0-3 1.8-4.7 4.5-4.7 1.3 0 2.6.2 2.6.2v2.9h-1.5c-1.5 0-1.9.7-1.9 1.9V12h3.3l-.5 3.4h-2.8v8.4A12 12 0 0 0 24 12z" />
                             </svg>
                         </button>
@@ -419,12 +462,7 @@ export default function ProductDetails() {
                             className="p-2 bg-[#1DA1F2] text-white rounded-full hover:bg-[#1A91DA] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                             aria-label="Chia sẻ trên Twitter"
                         >
-                            <svg
-                                className="w-5 h-5"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                            >
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M23.4 4.8a9.5 9.5 0 0 1-2.7.7 4.7 4.7 0 0 0 2-2.6 9.5 9.5 0 0 1-3 .1 4.7 4.7 0 0 0-8 4.3A13.3 13.3 0 0 1 1.6 2.5a4.7 4.7 0 0 0 1.5 6.3A4.7 4.7 0 0 1 .9 8v.1a4.7 4.7 0 0 0 3.8 4.6 4.7 4.7 0 0 1-2.1.1 4.7 4.7 0 0 0 4.4 3.3 9.5 9.5 0 0 1-5.9 2 9.5 9.5 0 0 1-1.1-.1 13.3 13.3 0 0 0 7.2 2.1c8.6 0 13.3-7.1 13.3-13.3 0-.2 0-.4-.1-.6a9.5 9.5 0 0 0 2.3-2.4z" />
                             </svg>
                         </button>
@@ -433,12 +471,7 @@ export default function ProductDetails() {
                             className="p-2 bg-[#25D366] text-white rounded-full hover:bg-[#20BD57] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                             aria-label="Chia sẻ trên WhatsApp"
                         >
-                            <svg
-                                className="w-5 h-5"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                            >
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M12 0a12 12 0 0 0-12 12c0 2.5.8 4.9 2.2 6.9L0 24l5.2-1.6A12 12 0 0 0 24 12 12 12 0 0 0 12 0zm6.6 17.6c-.3.8-1.5 1.5-2.3 1.7-1 .2-2.3.1-3.6-.5-1.5-.7-3-1.8-4.2-3.1-.9-.9-1.7-2-2-3.2-.3-1.2 0-2.4.6-3.3.3-.5.7-.8 1.2-.8h.4c.4 0 .8.2 1.1.6.4.5 1.2 1.5 1.3 1.6.1.2.2.4.1.6-.1.2-.3.5-.5.7-.2.2-.4.4-.5.6-.2.2-.2.5 0 .7.5.8 1.2 1.5 2 2.2.8.6 1.6 1.1 2.5 1.4.2.1.4.1.6-.1.2-.2.5-.4.7-.6.2-.2.4-.2.6-.1.2.1 1.2.6 1.5.7.3.2.5.3.6.5.1.2.1.6-.1.9z" />
                             </svg>
                         </button>
@@ -450,9 +483,7 @@ export default function ProductDetails() {
             <div className="mt-8 bg-white p-4 sm:p-6 rounded-lg shadow-md">
                 <h2 className="text-xl font-semibold text-[#1E3A8A] mb-4">Mô tả sản phẩm</h2>
                 <p className="text-[#1F2937] whitespace-pre-line leading-relaxed">
-                    {showFullDescription
-                        ? product.description || "Không có mô tả"
-                        : getTruncatedDescription(product.description)}
+                    {showFullDescription ? product.description || "Không có mô tả" : getTruncatedDescription(product.description)}
                 </p>
                 {product.description && product.description.split("\n").length > 3 && (
                     <button
@@ -479,50 +510,67 @@ export default function ProductDetails() {
                 <div className="mt-8 bg-white p-4 sm:p-6 rounded-lg shadow-md">
                     <h2 className="text-xl font-semibold text-[#1E3A8A] mb-4">Sản phẩm liên quan</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                        {relatedProducts.map((relatedProduct) => (
-                            <div
-                                key={relatedProduct.id}
-                                onClick={() => navigate(`/product/${relatedProduct.id}`)}
-                                className="border border-gray-200 rounded-lg shadow-md p-4 bg-white hover:shadow-lg transition-shadow duration-200 cursor-pointer flex flex-col h-full focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-                                tabIndex={0}
-                                onKeyDown={(e) => e.key === "Enter" && navigate(`/product/${relatedProduct.id}`)}
-                            >
-                                <img
-                                    src={`${API_URL}/${relatedProduct.images[0] || "/avatar.png"}`}
-                                    alt={`${relatedProduct.name} (${relatedProduct.categoryName})`}
-                                    className="w-full h-40 object-cover rounded-md mb-2"
-                                    onError={(e) => {
-                                        e.currentTarget.src = "/avatar.png";
-                                    }}
-                                />
-                                <h3 className="text-sm text-[#1F2937] font-semibold line-clamp-2">
-                                    {relatedProduct.name}
-                                </h3>
-                                <p className="text-lg font-semibold text-[#1F2937] mt-1">
-                                    {relatedProduct.salePrice.toLocaleString()}đ
-                                </p>
-                                <div className="mt-auto flex items-center justify-between">
-                                    <div className="text-xs text-[#10B981] flex items-center">
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            strokeWidth="1.5"
-                                            stroke="currentColor"
-                                            className="size-5 mr-1"
-                                            aria-hidden="true"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-                                            />
-                                        </svg>
-                                        {relatedProduct.status === "1" ? "Sẵn sàng" : "Hết hàng"}
+                        {relatedProducts.map((relatedProduct) => {
+                            const isRelatedDiscounted =
+                                relatedProduct.finalPrice != null &&
+                                relatedProduct.salePrice != null &&
+                                relatedProduct.finalPrice < relatedProduct.salePrice;
+                            return (
+                                <div
+                                    key={relatedProduct.id}
+                                    onClick={() => navigate(`/product/${relatedProduct.id}`)}
+                                    className="border border-gray-200 rounded-lg shadow-md p-4 bg-white hover:shadow-lg transition-shadow duration-200 cursor-pointer flex flex-col h-full focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => e.key === "Enter" && navigate(`/product/${relatedProduct.id}`)}
+                                >
+                                    <img
+                                        src={`${API_URL}/${relatedProduct.images[0] || "/avatar.png"}`}
+                                        alt={`${relatedProduct.name} (${relatedProduct.categoryName})`}
+                                        className="w-full h-40 object-cover rounded-md mb-2"
+                                        onError={(e) => {
+                                            e.currentTarget.src = "/avatar.png";
+                                        }}
+                                    />
+                                    <h3 className="text-sm text-[#1F2937] font-semibold line-clamp-2">{relatedProduct.name}</h3>
+                                    <div className="mt-1 flex items-center gap-2">
+                                        {isRelatedDiscounted ? (
+                                            <>
+                                                <p className="text-lg font-semibold text-[#EF4444]">
+                                                    {(relatedProduct.finalPrice ?? relatedProduct.salePrice ?? 0).toLocaleString()}đ
+                                                </p>
+                                                <p className="text-sm text-gray-500 line-through">
+                                                    {(relatedProduct.salePrice ?? 0).toLocaleString()}đ
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <p className="text-lg font-semibold text-[#1F2937]">
+                                                {(relatedProduct.salePrice ?? 0).toLocaleString()}đ
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="mt-auto flex items-center justify-between">
+                                        <div className="text-xs text-[#10B981] flex items-center">
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                strokeWidth="1.5"
+                                                stroke="currentColor"
+                                                className="size-5 mr-1"
+                                                aria-hidden="true"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M5 13l4 4L19 7" // Fixed SVG path
+                                                />
+                                            </svg>
+                                            {relatedProduct.status === "1" ? "Sẵn sàng" : "Hết hàng"}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             )}

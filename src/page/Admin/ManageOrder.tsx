@@ -13,7 +13,7 @@ interface OrderFormProps {
     title: string;
 }
 
-const OrderForm: React.FC<OrderFormProps> = ({ order, onSubmit, onCancel, title }) => {
+const OrderForm: React.FC<OrderFormProps> = React.memo(({ order, onSubmit, onCancel, title }) => {
     const [formData, setFormData] = useState<Partial<Order>>({
         userName: order.userName,
         status: order.status,
@@ -70,8 +70,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onSubmit, onCancel, title 
     );
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-            <div className="bg-white p-6 rounded-lg w-full max-w-md sm:max-w-lg shadow-xl">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 overflow-y-auto z-50">
+            <div className="bg-white p-6 rounded-lg w-full max-w-3xl shadow-xl">
                 <h2 className="text-xl font-bold text-[#1A202C] mb-4">{title}</h2>
                 {error && (
                     <div className="bg-red-100 text-[#E53E3E] p-2 rounded mb-4 text-sm">{error}</div>
@@ -80,8 +80,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onSubmit, onCancel, title 
                     <div>
                         <label
                             htmlFor="status"
-                            className={`block text-sm font-medium text-[#1A202C] transition-all duration-300 ${formData.status ? "text-[#2C5282] font-semibold" : ""
-                                }`}
+                            className={`block text-sm font-medium text-[#1A202C] ${formData.status ? 'text-[#2C5282] font-semibold' : ''}`}
                         >
                             Trạng thái <span className="text-[#E53E3E]">*</span>
                         </label>
@@ -109,8 +108,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onSubmit, onCancel, title 
                         <div key={field.name}>
                             <label
                                 htmlFor={field.name}
-                                className={`block text-sm font-medium text-[#1A202C] transition-all duration-300 ${formData[field.name as keyof Order] ? "text-[#2C5282] font-semibold" : ""
-                                    }`}
+                                className={`block text-sm font-medium text-[#1A202C] ${formData[field.name as keyof Order] ? 'text-[#2C5282] font-semibold' : ''}`}
                             >
                                 {field.label} {field.required && <span className="text-[#E53E3E]">*</span>}
                             </label>
@@ -143,14 +141,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onSubmit, onCancel, title 
             </div>
         </div>
     );
-};
+});
 
-const OrderDetailsModal: React.FC<{ order: Order; onClose: () => void }> = ({ order, onClose }) => {
+const OrderDetailsModal: React.FC<{ order: Order; onClose: () => void }> = React.memo(({ order, onClose }) => {
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-            <div className="bg-white p-6 rounded-lg w-full max-w-2xl shadow-xl">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 overflow-y-auto z-50">
+            <div className="bg-white p-6 rounded-lg w-full max-w-3xl shadow-xl">
                 <h2 className="text-xl font-bold text-[#1A202C] mb-4">Chi tiết đơn hàng #{order.orderNumber}</h2>
-                <div className="space-y-3">
+                <div className="space-y-3 text-sm">
                     <p>
                         <strong className="text-[#2C5282]">Mã đơn hàng:</strong> {order.orderNumber}
                     </p>
@@ -222,7 +220,7 @@ const OrderDetailsModal: React.FC<{ order: Order; onClose: () => void }> = ({ or
             </div>
         </div>
     );
-};
+});
 
 export const ManageOrder: React.FC = () => {
     const navigate = useNavigate();
@@ -238,6 +236,7 @@ export const ManageOrder: React.FC = () => {
     const [filterStatus, setFilterStatus] = useState<string>("");
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [itemsPerPage] = useState<number>(10);
+    const API_URL = "http://localhost:8080/datn";
 
     const statusOptions = [
         { value: "Pending", label: "Chờ xử lý" },
@@ -246,15 +245,17 @@ export const ManageOrder: React.FC = () => {
         { value: "Cancelled", label: "Đã hủy" },
     ];
 
-    const checkAdmin = async (accessToken: string) => {
+    const checkAdmin = useCallback(async (accessToken: string) => {
         try {
-            const response = await fetch("http://localhost:8080/datn/users/myInfo", {
+            const response = await fetch(`${API_URL}/users/myInfo`, {
                 method: "GET",
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) throw new Error("Không thể kiểm tra quyền admin");
-
             const data = await response.json();
             if (data.result?.roles?.some((role: { name: string }) => role.name === "ADMIN")) {
                 setIsAdmin(true);
@@ -265,17 +266,19 @@ export const ManageOrder: React.FC = () => {
             console.error("Error checking admin status:", err);
             setError(err.message || "Có lỗi xảy ra khi kiểm tra quyền admin");
         }
-    };
+    }, [navigate]);
 
-    const getAllOrders = async (accessToken: string) => {
+    const getAllOrders = useCallback(async (accessToken: string) => {
         try {
-            const response = await fetch("http://localhost:8080/datn/orders", {
+            const response = await fetch(`${API_URL}/orders`, {
                 method: "GET",
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) throw new Error("Không thể lấy danh sách đơn hàng");
-
             const data = await response.json();
             const ordersData = Array.isArray(data.result) ? data.result : data.result.data || [];
             setOrders(ordersData);
@@ -283,7 +286,7 @@ export const ManageOrder: React.FC = () => {
             console.error("Error fetching orders:", err);
             setError(err.message || "Có lỗi xảy ra khi tải danh sách đơn hàng");
         }
-    };
+    }, [navigate]);
 
     const handleEditOrder = useCallback((order: Order) => {
         setSelectedOrder(order);
@@ -295,22 +298,23 @@ export const ManageOrder: React.FC = () => {
         setIsViewModalOpen(true);
     }, []);
 
-    const handleDeleteOrder = async (orderId: number) => {
+    const handleDeleteOrder = useCallback(async (orderId: number) => {
         if (!window.confirm("Bạn có chắc muốn xóa đơn hàng này?")) return;
         try {
-            const accessToken = getToken();
-            if (!accessToken) throw new Error("Không tìm thấy token");
-
-            const response = await fetch(`http://localhost:8080/datn/orders/${orderId}`, {
+            const accessToken = await getToken();
+            if (!accessToken) throw new Error("Access token not found");
+            const response = await fetch(`${API_URL}/orders/${orderId}`, {
                 method: "DELETE",
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.message || "Không thể xóa đơn hàng");
             }
-
             setOrders((prev) => prev.filter((o) => o.id !== orderId));
             setSearchTerm("");
             toast.success("Xóa đơn hàng thành công!");
@@ -318,14 +322,13 @@ export const ManageOrder: React.FC = () => {
             console.error("Error deleting order:", err);
             toast.error(err.message || "Có lỗi xảy ra khi xóa đơn hàng");
         }
-    };
+    }, [navigate]);
 
-    const handleUpdateOrder = async (formData: Partial<Order>) => {
+    const handleUpdateOrder = useCallback(async (formData: Partial<Order>) => {
         if (!selectedOrder) return;
         try {
-            const accessToken = getToken();
-            if (!accessToken) throw new Error("Không tìm thấy token");
-
+            const accessToken = await getToken();
+            if (!accessToken) throw new Error("Access token not found");
             const updateRequest = {
                 userName: formData.userName || selectedOrder.userName,
                 status: formData.status || selectedOrder.status,
@@ -335,7 +338,7 @@ export const ManageOrder: React.FC = () => {
                 orderNote: formData.orderNote || selectedOrder.orderNote,
                 orderItems: selectedOrder.orderItems,
             };
-            const response = await fetch(`http://localhost:8080/datn/orders/${selectedOrder.id}`, {
+            const response = await fetch(`${API_URL}/orders/${selectedOrder.id}`, {
                 method: "PUT",
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
@@ -343,12 +346,14 @@ export const ManageOrder: React.FC = () => {
                 },
                 body: JSON.stringify(updateRequest),
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.message || "Không thể cập nhật đơn hàng");
             }
-
             const updatedOrder = await response.json();
             setOrders((prev) =>
                 prev.map((o) => (o.id === updatedOrder.result.id ? updatedOrder.result : o))
@@ -360,24 +365,29 @@ export const ManageOrder: React.FC = () => {
             console.error("Error updating order:", err);
             toast.error(err.message || "Có lỗi xảy ra khi cập nhật đơn hàng");
         }
-    };
+    }, [navigate, selectedOrder]);
 
     useEffect(() => {
         const fetchData = async () => {
-            const accessToken = getToken();
+            const accessToken = await getToken();
             if (!accessToken) {
                 navigate("/login");
                 return;
             }
-            await Promise.all([checkAdmin(accessToken), getAllOrders(accessToken)]);
-            setIsLoading(false);
+            setIsLoading(true);
+            try {
+                await Promise.all([checkAdmin(accessToken), getAllOrders(accessToken)]);
+            } catch (err: any) {
+                setError(err.message || "Có lỗi xảy ra khi tải dữ liệu");
+            } finally {
+                setIsLoading(false);
+            }
         };
-
         fetchData();
-    }, [navigate]);
+    }, [navigate, checkAdmin, getAllOrders]);
 
     useEffect(() => {
-        if (!isLoading && !isAdmin) navigate("/");
+        if (!isLoading && !isAdmin) navigate("/home");
     }, [isLoading, isAdmin, navigate]);
 
     // Search and filter logic
@@ -397,35 +407,40 @@ export const ManageOrder: React.FC = () => {
         currentPage * itemsPerPage
     );
 
-    const handlePageChange = (page: number) => {
+    const handlePageChange = useCallback((page: number) => {
         setCurrentPage(page);
-    };
+    }, []);
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-screen bg-[#EDF2F7]">
-                <div className="flex flex-col items-center">
-                    <svg
-                        className="animate-spin h-8 w-8 text-[#2C5282]"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                    >
-                        <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                        ></circle>
-                        <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                    </svg>
-                    <span className="mt-2 text-[#1A202C]">Đang tải...</span>
+            <div className="p-4 sm:p-6 bg-[#EDF2F7]">
+                <div className="overflow-x-auto bg-white rounded-lg shadow-md">
+                    <table className="w-full border border-gray-200">
+                        <thead>
+                            <tr className="bg-gray-100 text-[#1A202C] text-sm uppercase tracking-wider">
+                                <th className="py-3 px-4 border-b text-center w-16 sm:w-20">STT</th>
+                                <th className="py-3 px-4 border-b text-center">Mã đơn</th>
+                                <th className="py-3 px-4 border-b text-center">Ngày tạo</th>
+                                <th className="py-3 px-4 border-b text-center">Tên khách hàng</th>
+                                <th className="py-3 px-4 border-b text-center">Tổng tiền</th>
+                                <th className="py-3 px-4 border-b text-center">Trạng thái</th>
+                                <th className="py-3 px-4 border-b text-center w-32">Hành động</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {Array.from({ length: itemsPerPage }).map((_, idx) => (
+                                <tr key={idx}>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         );
@@ -450,105 +465,87 @@ export const ManageOrder: React.FC = () => {
                             placeholder={`Tìm kiếm theo ${searchField === "userName" ? "tên khách hàng" : "mã đơn hàng"}...`}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="border border-gray-300 px-3 py-2 rounded-md w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
+                            className="w-full sm:w-64 border text-sm border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
                         />
                         <div className="flex space-x-4 mt-2">
-                            <label className="flex items-center space-x-1">
+                            <label className="inline-flex items-center space-x-1">
                                 <input
                                     type="radio"
                                     name="searchField"
                                     value="userName"
                                     checked={searchField === "userName"}
                                     onChange={() => setSearchField("userName")}
-                                    className="form-radio h-4 w-4 text-[#3182CE]"
+                                    className="form-radio h-4 w-4 text-[#3182CE] focus:ring-[#3182CE]"
                                 />
                                 <span className="text-sm text-[#1A202C]">Tên khách hàng</span>
                             </label>
-                            <label className="flex items-center space-x-1">
+                            <label className="inline-flex items-center space-x-1">
                                 <input
                                     type="radio"
                                     name="searchField"
                                     value="orderNumber"
                                     checked={searchField === "orderNumber"}
                                     onChange={() => setSearchField("orderNumber")}
-                                    className="form-radio h-4 w-4 text-[#3182CE]"
+                                    className="form-radio h-4 w-4 text-[#3182CE] focus:ring-[#3182CE]"
                                 />
                                 <span className="text-sm text-[#1A202C]">Mã đơn hàng</span>
                             </label>
                         </div>
                     </div>
                 </div>
-                <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="border border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200 w-full sm:w-auto"
-                >
-                    <option value="">-- Lọc theo trạng thái --</option>
-                    {statusOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                            {option.label}
-                        </option>
-                    ))}
-                </select>
+                <div className="flex flex-col w-full sm:w-auto">
+                    <label className="block text-sm font-medium text-[#1A202C] mb-1">Lọc theo trạng thái</label>
+                    <select
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        className="w-full sm:w-48 border text-sm border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
+                    >
+                        <option value="">-- Chọn trạng thái --</option>
+                        {statusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
             </div>
-            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
-                <table className="min-w-full border border-gray-200">
+            <div className="overflow-x-auto bg-white rounded-lg shadow-md">
+                <table className="w-full border border-gray-200">
                     <thead>
-                        <tr className="bg-[#2C5282] text-white text-sm uppercase tracking-wider">
-                            <th className="py-3 px-4 border-b border-gray-200 text-center w-16 sm:w-20">
-                                STT
-                            </th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-left">Mã đơn</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-left">Ngày tạo</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-left">Tên khách hàng</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-left">Tổng tiền</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-left">Trạng thái</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-center w-24 sm:w-32">
-                                Hành động
-                            </th>
+                        <tr className="bg-gray-100 text-[#1A202C] text-sm uppercase tracking-wider">
+                            <th className="py-3 px-4 border-b text-center w-16 sm:w-20">STT</th>
+                            <th className="py-3 px-4 border-b text-center">Mã đơn</th>
+                            <th className="py-3 px-4 border-b text-center">Ngày tạo</th>
+                            <th className="py-3 px-4 border-b text-center">Tên khách hàng</th>
+                            <th className="py-3 px-4 border-b text-center">Tổng tiền</th>
+                            <th className="py-3 px-4 border-b text-center">Trạng thái</th>
+                            <th className="py-3 px-4 border-b text-center w-32">Hành động</th>
                         </tr>
                     </thead>
                     <tbody>
                         {isLoading ? (
-                            Array.from({ length: itemsPerPage }).map((_, index) => (
-                                <tr key={index}>
-                                    <td className="py-3 px-4">
-                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
-                                    </td>
-                                    <td className="py-3 px-4">
-                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
-                                    </td>
-                                    <td className="py-3 px-4">
-                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
-                                    </td>
-                                    <td className="py-3 px-4">
-                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
-                                    </td>
-                                    <td className="py-3 px-4">
-                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
-                                    </td>
-                                    <td className="py-3 px-4">
-                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
-                                    </td>
-                                    <td className="py-3 px-4">
-                                        <div className="animate-pulse h-4 bg-gray-200 rounded"></div>
-                                    </td>
+                            Array.from({ length: itemsPerPage }).map((_, idx) => (
+                                <tr key={idx}>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
                                 </tr>
                             ))
                         ) : paginatedOrders.length > 0 ? (
-                            paginatedOrders.map((order, index) => (
+                            paginatedOrders.map((order, idx) => (
                                 <tr
                                     key={order.id}
-                                    className={`border-b border-gray-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                                        } hover:bg-[#EDF2F7] transition-colors duration-200`}
+                                    className={`border-b ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-gray-100 transition-colors duration-200`}
                                 >
                                     <td className="py-3 px-4 text-center text-[#1A202C]">
-                                        {(currentPage - 1) * itemsPerPage + index + 1}
+                                        {(currentPage - 1) * itemsPerPage + idx + 1}
                                     </td>
-                                    <td className="py-3 px-4 text-start text-[#1A202C]">
-                                        {order.orderNumber}
-                                    </td>
-                                    <td className="py-3 px-4 text-[#1A202C]">
+                                    <td className="py-3 px-4 text-center text-[#1A202C] truncate">{order.orderNumber}</td>
+                                    <td className="py-3 px-4 text-center text-[#1A202C] truncate">
                                         {order.createdDate
                                             ? new Date(order.createdDate).toLocaleString("vi-VN", {
                                                 day: "2-digit",
@@ -559,92 +556,94 @@ export const ManageOrder: React.FC = () => {
                                             }).replace(/,/, "")
                                             : "N/A"}
                                     </td>
-                                    <td className="py-3 px-4 text-start text-[#1A202C]">{order.userName}</td>
-                                    <td className="py-3 px-4 text-start text-[#1A202C]">
+                                    <td className="py-3 px-4 text-center text-[#1A202C] truncate">{order.userName || "Không có"}</td>
+                                    <td className="py-3 px-4 text-center text-[#1A202C] truncate">
                                         {order.totalAmount.toLocaleString("vi-VN", {
                                             style: "currency",
                                             currency: "VND",
                                         })}
                                     </td>
-                                    <td className="py-3 px-4 text-start text-[#1A202C]">
-                                        <span className={`status-badge status-${order.status.toLowerCase()}`}>
+                                    <td className="py-3 px-4 text-center text-[#1A202C] truncate">
+                                        <span className={`status-badge text-sm status-${order.status.toLowerCase()}`}>
                                             {statusOptions.find((option) => option.value === order.status)?.label ||
                                                 order.status}
                                         </span>
                                     </td>
-                                    <td className="py-3 px-4 text-start">
-                                        <button
-                                            onClick={() => handleViewOrder(order)}
-                                            className="text-green-600 hover:text-green-500 hover:font-bold transition-colors duration-200 mr-2 sm:mr-4"
-                                            title="Xem chi tiết"
-                                        >
-                                            <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                strokeWidth="1.5"
-                                                stroke="currentColor"
-                                                className="w-5 h-5"
+                                    <td className="py-3 px-4 text-center">
+                                        <div className="flex justify-center items-center space-x-2">
+                                            <button
+                                                onClick={() => handleViewOrder(order)}
+                                                className="text-green-500 hover:text-green-600 transition-colors duration-200"
+                                                title="Xem chi tiết"
                                             >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
-                                                />
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                                />
-                                            </svg>
-                                        </button>
-                                        <button
-                                            onClick={() => handleEditOrder(order)}
-                                            className="text-[#3182CE] hover:text-[#2C5282] transition-colors duration-200 mr-2 sm:mr-4"
-                                            title="Chỉnh sửa"
-                                        >
-                                            <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                strokeWidth="1.5"
-                                                stroke="currentColor"
-                                                className="w-5 h-5"
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    strokeWidth="1.5"
+                                                    stroke="currentColor"
+                                                    className="w-5 h-5"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
+                                                    />
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                    />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                onClick={() => handleEditOrder(order)}
+                                                className="text-blue-500 hover:text-blue-600 transition-colors duration-200"
+                                                title="Chỉnh sửa"
                                             >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
-                                                />
-                                            </svg>
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteOrder(order.id)}
-                                            className="text-red-500 hover:text-red-700 transition-colors duration-200"
-                                            title="Xóa"
-                                        >
-                                            <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                strokeWidth="1.5"
-                                                stroke="currentColor"
-                                                className="w-5 h-5"
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    strokeWidth="1.5"
+                                                    stroke="currentColor"
+                                                    className="w-5 h-5"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7m-1.5-4.5a2.121 2.121 0 0 1 3 Đồng 3L12 15l-4 1 1-4 9.5-9.5z"
+                                                    />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteOrder(order.id)}
+                                                className="text-red-500 hover:text-red-600 transition-colors duration-200"
+                                                title="Xóa"
                                             >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
-                                                />
-                                            </svg>
-                                        </button>
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    strokeWidth="1.5"
+                                                    stroke="currentColor"
+                                                    className="w-5 h-5"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        d="M6 18L18 6M6 6l12 12"
+                                                    />
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={7} className="py-3 px-4 text-start text-[#1A202C]">
-                                    Không có đơn hàng
+                                <td colSpan={7} className="py-3 px-4 text-center text-[#666]">
+                                    Không tìm thấy đơn hàng
                                 </td>
                             </tr>
                         )}
@@ -657,10 +656,7 @@ export const ManageOrder: React.FC = () => {
                     <button
                         onClick={() => handlePageChange(currentPage - 1)}
                         disabled={currentPage === 1}
-                        className={`px-3 py-1 rounded-md ${currentPage === 1
-                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                            : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
-                            } transition-all duration-200`}
+                        className={`px-3 py-1 rounded-md text-sm ${currentPage === 1 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'} transition-colors duration-200`}
                     >
                         Trước
                     </button>
@@ -668,10 +664,7 @@ export const ManageOrder: React.FC = () => {
                         <button
                             key={page}
                             onClick={() => handlePageChange(page)}
-                            className={`px-3 py-1 rounded-md ${currentPage === page
-                                ? "bg-[#3182CE] text-white"
-                                : "bg-white text-[#1A202C] hover:bg-[#EDF2F7]"
-                                } transition-all duration-200`}
+                            className={`px-3 py-1 rounded-md text-sm ${currentPage === page ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'} transition-all duration-200 border border-gray-200`}
                         >
                             {page}
                         </button>
@@ -679,10 +672,7 @@ export const ManageOrder: React.FC = () => {
                     <button
                         onClick={() => handlePageChange(currentPage + 1)}
                         disabled={currentPage === totalPages}
-                        className={`px-3 py-1 rounded-md ${currentPage === totalPages
-                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                            : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
-                            } transition-all duration-200`}
+                        className={`px-3 py-1 rounded-md text-sm ${currentPage === totalPages ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'} transition-colors duration-200`}
                     >
                         Sau
                     </button>

@@ -4,11 +4,18 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { getToken } from "../../services/localStorageService";
 
+enum DiscountType {
+    PERCENTAGE = "PERCENTAGE",
+    FIXED_AMOUNT = "FIXED_AMOUNT",
+}
+
 interface Discount {
     id: string;
     startDate: string;
     endDate: string;
-    discountPercent: number;
+    discountPercent: number | null;
+    discountAmount: number | null;
+    isGlobal: boolean;
     code: string;
     status: string;
     quantity: number;
@@ -16,15 +23,19 @@ interface Discount {
     lastModifiedBy: string;
     createdDate: string;
     lastModifiedDate: string;
+    type: DiscountType;
 }
 
 interface DiscountFormData {
     startDate: string;
     endDate: string;
-    discountPercent: number;
+    discountPercent: number | null;
+    discountAmount: number | null;
+    isGlobal: boolean;
     code: string;
     status: string;
     quantity: number;
+    type: DiscountType;
 }
 
 interface DiscountFormProps {
@@ -53,11 +64,13 @@ const DiscountForm: React.FC<DiscountFormProps> = React.memo(({ discount, onSubm
         ...discount,
         startDate: formatDateForInput(discount.startDate),
         endDate: formatDateForInput(discount.endDate),
+        discountPercent: discount.discountPercent ?? 0,
+        discountAmount: discount.discountAmount ?? 0,
     });
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleInputChange = useCallback((field: keyof Discount, value: string | number) => {
+    const handleInputChange = useCallback((field: keyof Discount, value: string | number | boolean | null) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
         setError(null);
     }, []);
@@ -83,16 +96,24 @@ const DiscountForm: React.FC<DiscountFormProps> = React.memo(({ discount, onSubm
             setError("Ngày bắt đầu phải trước ngày kết thúc");
             return false;
         }
-        if (formData.discountPercent <= 0 || formData.discountPercent > 100) {
+        if (formData.type === DiscountType.PERCENTAGE && (formData.discountPercent == null || formData.discountPercent <= 0 || formData.discountPercent > 100)) {
             setError("Phần trăm giảm giá phải từ 0 đến 100");
             return false;
         }
+        if (formData.type === DiscountType.FIXED_AMOUNT && (formData.discountAmount == null || formData.discountAmount <= 0)) {
+            setError("Số tiền giảm phải lớn hơn 0");
+            return false;
+        }
         if (formData.quantity < 0) {
-            setError("Số lượng không được âm");
+            setError("Số lượng không hợp lệ");
             return false;
         }
         if (!formData.status) {
             setError("Vui lòng chọn trạng thái");
+            return false;
+        }
+        if (formData.type === null || formData.type === undefined) {
+            setError("Vui lòng chọn loại giảm giá");
             return false;
         }
         return true;
@@ -108,6 +129,8 @@ const DiscountForm: React.FC<DiscountFormProps> = React.memo(({ discount, onSubm
                     ...formData,
                     startDate: `${formData.startDate}T00:00:00`,
                     endDate: `${formData.endDate}T00:00:00`,
+                    discountPercent: formData.type === DiscountType.PERCENTAGE ? formData.discountPercent : null,
+                    discountAmount: formData.type === DiscountType.FIXED_AMOUNT ? formData.discountAmount : null,
                 };
                 await onSubmit(formattedFormData);
             } catch (err: any) {
@@ -177,23 +200,66 @@ const DiscountForm: React.FC<DiscountFormProps> = React.memo(({ discount, onSubm
                     </div>
                     <div>
                         <label
-                            htmlFor="discountPercent"
-                            className={`block text-sm font-medium text-[#1A202C] ${formData.discountPercent ? "text-[#2C5282] font-semibold" : ""}`}
+                            htmlFor="type"
+                            className={`block text-sm font-medium text-[#1A202C] ${formData.type ? "text-[#2C5282] font-semibold" : ""}`}
                         >
-                            Phần trăm giảm giá <span className="text-[#E53E3E]">*</span>
+                            Loại giảm giá <span className="text-[#E53E3E]">*</span>
                         </label>
-                        <input
-                            type="number"
-                            id="discountPercent"
-                            value={formData.discountPercent || ""}
-                            onChange={(e) => handleInputChange("discountPercent", Number(e.target.value))}
+                        <select
+                            id="type"
+                            value={formData.type || ""}
+                            onChange={(e) => handleInputChange("type", e.target.value as DiscountType)}
                             className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
                             required
-                            min="0"
-                            max="100"
-                            step="0.01"
-                        />
+                        >
+                            <option value="" disabled>
+                                Chọn loại giảm giá
+                            </option>
+                            <option value="PERCENTAGE">Phần trăm</option>
+                            <option value="FIXED_AMOUNT">Số tiền cố định</option>
+                        </select>
                     </div>
+                    {formData.type === DiscountType.PERCENTAGE && (
+                        <div>
+                            <label
+                                htmlFor="discountPercent"
+                                className={`block text-sm font-medium text-[#1A202C] ${formData.discountPercent ? "text-[#2C5282] font-semibold" : ""}`}
+                            >
+                                Phần trăm giảm giá <span className="text-[#E53E3E]">*</span>
+                            </label>
+                            <input
+                                type="number"
+                                id="discountPercent"
+                                value={formData.discountPercent ?? ""}
+                                onChange={(e) => handleInputChange("discountPercent", Number(e.target.value) || null)}
+                                className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
+                                required
+                                min="0"
+                                max="100"
+                                step="0.01"
+                            />
+                        </div>
+                    )}
+                    {formData.type === DiscountType.FIXED_AMOUNT && (
+                        <div>
+                            <label
+                                htmlFor="discountAmount"
+                                className={`block text-sm font-medium text-[#1A202C] ${formData.discountAmount ? "text-[#2C5282] font-semibold" : ""}`}
+                            >
+                                Số tiền giảm <span className="text-[#E53E3E]">*</span>
+                            </label>
+                            <input
+                                type="number"
+                                id="discountAmount"
+                                value={formData.discountAmount ?? ""}
+                                onChange={(e) => handleInputChange("discountAmount", Number(e.target.value) || null)}
+                                className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
+                                required
+                                min="0"
+                                step="0.01"
+                            />
+                        </div>
+                    )}
                     <div>
                         <label
                             htmlFor="quantity"
@@ -204,7 +270,7 @@ const DiscountForm: React.FC<DiscountFormProps> = React.memo(({ discount, onSubm
                         <input
                             type="number"
                             id="quantity"
-                            value={formData.quantity || ""}
+                            value={formData.quantity ?? ""}
                             onChange={(e) => handleInputChange("quantity", Number(e.target.value))}
                             className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
                             required
@@ -228,6 +294,21 @@ const DiscountForm: React.FC<DiscountFormProps> = React.memo(({ discount, onSubm
                             <option value="ACTIVE">Hoạt động</option>
                             <option value="INACTIVE">Không hoạt động</option>
                         </select>
+                    </div>
+                    <div>
+                        <label
+                            htmlFor="isGlobal"
+                            className={`block text-sm font-medium text-[#1A202C] ${formData.isGlobal !== null ? "text-[#2C5282] font-semibold" : ""}`}
+                        >
+                            Áp dụng toàn cục
+                        </label>
+                        <input
+                            type="checkbox"
+                            id="isGlobal"
+                            checked={formData.isGlobal || false}
+                            onChange={(e) => handleInputChange("isGlobal", e.target.checked)}
+                            className="mt-1 h-4 w-4 text-[#3182CE] focus:ring-[#3182CE] border-gray-300 rounded"
+                        />
                     </div>
                     <div className="flex justify-end space-x-2">
                         <button
@@ -270,10 +351,13 @@ export const ManageDiscount: React.FC = () => {
         "",
         "code",
         "discountPercent",
+        "discountAmount",
         "quantity",
         "status",
         "startDate",
         "endDate",
+        "type",
+        "isGlobal",
     ];
 
     useEffect(() => {
@@ -311,14 +395,18 @@ export const ManageDiscount: React.FC = () => {
             setIsAdmin(true);
         } catch (err: any) {
             toast.error(err.message || "Có lỗi khi kiểm tra quyền admin");
-            setIsAdmin(false); // Ensure isAdmin is false on error
+            setIsAdmin(false);
         }
     }, [fetchData]);
 
     const fetchAllDiscounts = useCallback(async () => {
         try {
             const discountData = await fetchData("discounts", "Không thể lấy danh sách mã giảm giá");
-            setDiscounts(discountData);
+            setDiscounts(discountData.map((d: Discount) => ({
+                ...d,
+                discountPercent: d.discountPercent ?? null,
+                discountAmount: d.discountAmount ?? null,
+            })));
         } catch (err: any) {
             toast.error(err.message || "Có lỗi khi lấy danh sách mã giảm giá");
         }
@@ -331,10 +419,10 @@ export const ManageDiscount: React.FC = () => {
 
     const handleDeleteDiscount = useCallback(
         async (discountId: string) => {
-            if (!window.confirm("Bạn có chắc muốn xóa mã giảm giá này?")) return;
+            if (!window.confirm("Bạn có chắc chắn muốn xóa mã giảm giá này?")) return;
             try {
                 const accessToken = await getToken();
-                if (!accessToken) throw new Error("Access token not found");
+                if (!accessToken) throw new Error("Access token không tồn tại");
                 const response = await fetch(`${API_URL}/discounts/${discountId}`, {
                     method: "DELETE",
                     headers: { Authorization: `Bearer ${accessToken}` },
@@ -360,7 +448,7 @@ export const ManageDiscount: React.FC = () => {
         async (formData: DiscountFormData) => {
             try {
                 const accessToken = await getToken();
-                if (!accessToken) throw new Error("Access token not found");
+                if (!accessToken) throw new Error("Access token không tồn tại");
                 const response = await fetch(`${API_URL}/discounts`, {
                     method: "POST",
                     headers: {
@@ -393,7 +481,7 @@ export const ManageDiscount: React.FC = () => {
         async (formData: DiscountFormData) => {
             try {
                 const accessToken = await getToken();
-                if (!accessToken) throw new Error("Access token not found");
+                if (!accessToken) throw new Error("Access token không tồn tại");
                 const response = await fetch(`${API_URL}/discounts/${selectedDiscount!.id}`, {
                     method: "PUT",
                     headers: {
@@ -428,9 +516,9 @@ export const ManageDiscount: React.FC = () => {
         const fetchInitialData = async () => {
             setIsLoading(true);
             try {
-                await checkAdminStatus(); // Run admin check first
+                await checkAdminStatus();
                 if (isAdmin) {
-                    await fetchAllDiscounts(); // Only fetch discounts if admin check passes
+                    await fetchAllDiscounts();
                 }
             } finally {
                 setIsLoading(false);
@@ -440,20 +528,25 @@ export const ManageDiscount: React.FC = () => {
     }, [checkAdminStatus, fetchAllDiscounts, isAdmin]);
 
     useEffect(() => {
-        if (!isLoading && !isAdmin) {
+        if (!isAdmin && !isLoading) {
             navigate("/home");
         }
-    }, [isLoading, isAdmin, navigate]);
+    }, [isAdmin, isLoading, navigate]);
 
     const filteredDiscounts = discounts.filter((discount) =>
         discount.code.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const sortedDiscounts = [...filteredDiscounts].sort((a, b) => {
+    const sortedDiscounts = [...filteredDiscounts].sort((a: Discount, b: Discount) => {
         if (!sortField) return 0;
-        if (sortField === "discountPercent" || sortField === "quantity") {
+        if (sortField === "discountPercent" || sortField === "discountAmount" || sortField === "quantity") {
             const valueA = a[sortField] ?? 0;
             const valueB = b[sortField] ?? 0;
+            return sortDirection === "asc" ? valueA - valueB : valueB - valueA;
+        }
+        if (sortField === "isGlobal") {
+            const valueA = a[sortField] ? 1 : 0;
+            const valueB = b[sortField] ? 1 : 0;
             return sortDirection === "asc" ? valueA - valueB : valueB - valueA;
         }
         const valueA = a[sortField] || "";
@@ -515,9 +608,12 @@ export const ManageDiscount: React.FC = () => {
                                 code: "",
                                 startDate: "",
                                 endDate: "",
-                                discountPercent: 0,
-                                quantity: 0,
+                                discountPercent: null,
+                                discountAmount: null,
+                                isGlobal: false,
+                                type: DiscountType.PERCENTAGE,
                                 status: "ACTIVE",
+                                quantity: 0,
                                 createdBy: "",
                                 lastModifiedBy: "",
                                 createdDate: "",
@@ -551,10 +647,13 @@ export const ManageDiscount: React.FC = () => {
                                 <option key={field} value={field}>
                                     {field === "code" && "Mã giảm giá"}
                                     {field === "discountPercent" && "Phần trăm giảm giá"}
+                                    {field === "discountAmount" && "Số tiền giảm"}
                                     {field === "quantity" && "Số lượng"}
                                     {field === "status" && "Trạng thái"}
                                     {field === "startDate" && "Ngày bắt đầu"}
                                     {field === "endDate" && "Ngày kết thúc"}
+                                    {field === "type" && "Loại giảm giá"}
+                                    {field === "isGlobal" && "Áp dụng toàn cục"}
                                 </option>
                             ))}
                         </select>
@@ -585,6 +684,7 @@ export const ManageDiscount: React.FC = () => {
                     </div>
                 </div>
             </div>
+
             <div className="overflow-x-auto bg-white rounded-lg shadow-md">
                 <table className="w-full border border-gray-200">
                     <thead>
@@ -592,10 +692,13 @@ export const ManageDiscount: React.FC = () => {
                             <th className="py-3 px-4 border-b text-center w-16 sm:w-20">STT</th>
                             <th className="py-3 px-4 border-b text-center">Mã giảm giá</th>
                             <th className="py-3 px-4 border-b text-center hidden md:table-cell">Phần trăm giảm</th>
+                            <th className="py-3 px-4 border-b text-center hidden md:table-cell">Số tiền giảm</th>
                             <th className="py-3 px-4 border-b text-center hidden sm:table-cell">Số lượng</th>
                             <th className="py-3 px-4 border-b text-center hidden md:table-cell">Trạng thái</th>
                             <th className="py-3 px-4 border-b text-center hidden lg:table-cell">Ngày bắt đầu</th>
                             <th className="py-3 px-4 border-b text-center hidden lg:table-cell">Ngày kết thúc</th>
+                            <th className="py-3 px-4 border-b text-center hidden md:table-cell">Loại giảm giá</th>
+                            <th className="py-3 px-4 border-b text-center hidden lg:table-cell">Áp dụng toàn cục</th>
                             <th className="py-3 px-4 border-b text-center w-24 sm:w-32">Hành động</th>
                         </tr>
                     </thead>
@@ -609,9 +712,16 @@ export const ManageDiscount: React.FC = () => {
                                     <td className="py-3 px-4 text-center text-[#1A202C]">
                                         {(currentPage - 1) * itemsPerPage + index + 1}
                                     </td>
-                                    <td className="py-3 px-4 text-[#1A202C] text-center truncate">{discount.code}</td>
+                                    <td className="py-3 px-4 text-[#1A202C] text-center truncate sm:text-sm">{discount.code}</td>
                                     <td className="py-3 px-4 text-center text-[#1A202C] hidden md:table-cell">
-                                        {discount.discountPercent.toLocaleString()}%
+                                        {discount.type === "PERCENTAGE" && discount.discountPercent != null
+                                            ? `${discount.discountPercent.toLocaleString()}%`
+                                            : "-"}
+                                    </td>
+                                    <td className="py-3 px-4 text-center text-[#1A202C] hidden md:table-cell">
+                                        {discount.type === "FIXED_AMOUNT" && discount.discountAmount != null
+                                            ? discount.discountAmount.toLocaleString()
+                                            : "-"}
                                     </td>
                                     <td className="py-3 px-4 text-center text-[#1A202C] hidden sm:table-cell">
                                         {discount.quantity.toLocaleString()}
@@ -624,6 +734,12 @@ export const ManageDiscount: React.FC = () => {
                                     </td>
                                     <td className="py-3 px-4 text-center text-[#1A202C] hidden lg:table-cell">
                                         {formatDateForDisplay(discount.endDate)}
+                                    </td>
+                                    <td className="py-3 px-4 text-center text-[#1A202C] hidden md:table-cell">
+                                        {discount.type === "PERCENTAGE" ? "Phần trăm" : "Số tiền cố định"}
+                                    </td>
+                                    <td className="py-3 px-4 text-center text-[#1A202C] hidden lg:table-cell">
+                                        {discount.isGlobal ? "Có" : "Không"}
                                     </td>
                                     <td className="py-3 px-4 text-center">
                                         <div className="flex justify-center items-center space-x-2">
@@ -673,7 +789,7 @@ export const ManageDiscount: React.FC = () => {
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={8} className="py-3 px-4 text-center text-[#666]">
+                                <td colSpan={11} className="py-3 px-4 text-center text-[#666] text-sm">
                                     Không tìm thấy mã giảm giá
                                 </td>
                             </tr>
@@ -681,12 +797,11 @@ export const ManageDiscount: React.FC = () => {
                     </tbody>
                 </table>
             </div>
-
             {totalPages > 1 && (
                 <div className="flex justify-center mt-4 space-x-2">
                     <button
-                        onClick={() => handlePageChange(currentPage - 1)}
                         disabled={currentPage === 1}
+                        onClick={() => handlePageChange(currentPage - 1)}
                         className={`px-3 py-1 rounded-md text-sm ${currentPage === 1 ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-blue-500 text-white hover:bg-blue-600"} transition-colors duration-200`}
                     >
                         Trước
@@ -695,7 +810,7 @@ export const ManageDiscount: React.FC = () => {
                         <button
                             key={page}
                             onClick={() => handlePageChange(page)}
-                            className={`px-3 py-1 rounded-md text-sm ${currentPage === page ? "bg-blue-500 text-white" : "bg-white text-gray-700 hover:bg-gray-100"} transition-all duration-200 border border-gray-200`}
+                            className={`px-3 py-1 rounded-md text-sm ${currentPage === page ? "bg-blue-500 text-white font-semibold" : "bg-white text-gray-700 hover:bg-gray-100"} transition-all duration-200 border border-gray-200`}
                         >
                             {page}
                         </button>

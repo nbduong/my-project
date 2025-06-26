@@ -1,11 +1,10 @@
-import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { getToken, loadCart, saveCart } from "../services/localStorageService";
+import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { getToken, loadCart, saveCart } from '../services/localStorageService';
+import { Product, CartItem } from '../services/types'; // Import shared types
+import { toast } from 'react-toastify';
 
-// Import từ types.ts nếu đã tạo
-import { Product, CartItem } from "../services/types";
-
-const API_URL = "http://localhost:8080/datn";
+const API_URL = 'http://localhost:8080/datn';
 
 export function CartPage() {
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -14,24 +13,38 @@ export function CartPage() {
     // Load cart from localStorage on mount
     useEffect(() => {
         const loadedCart = loadCart();
-        setCartItems(loadedCart);
+        // Sanitize prices to ensure no null values
+        const sanitizedCart = loadedCart.map((item) => ({
+            ...item,
+            product: {
+                ...item.product,
+                salePrice: item.product.salePrice ?? 0,
+                finalPrice: item.product.finalPrice ?? null,
+            },
+        }));
+        setCartItems(sanitizedCart);
     }, []);
 
     // Remove item from cart
     const removeFromCart = (productId: string) => {
         const updatedCart = cartItems.filter((item) => item.product.id !== productId);
         setCartItems(updatedCart);
-        saveCart(updatedCart); // Use saveCart service for consistency
+        saveCart(updatedCart);
     };
 
     // Update quantity of an item
     const updateQuantity = (productId: string, quantity: number) => {
         if (quantity < 1) return;
+        const item = cartItems.find((item) => item.product.id === productId);
+        if (item && item.product.quantity != null && quantity > item.product.quantity) {
+            toast.error(`Không thể thêm! Chỉ còn ${item.product.quantity} sản phẩm trong kho.`);
+            return;
+        }
         const updatedCart = cartItems.map((item) =>
             item.product.id === productId ? { ...item, quantity: Math.min(quantity, 999) } : item
         );
         setCartItems(updatedCart);
-        saveCart(updatedCart); // Use saveCart service for consistency
+        saveCart(updatedCart);
     };
 
     // Calculate total number of items
@@ -39,15 +52,18 @@ export function CartPage() {
 
     // Calculate total price
     const getTotalPrice = (): number =>
-        cartItems.reduce((total, item) => total + item.product.salePrice * item.quantity, 0); // Thay price bằng salePrice
+        cartItems.reduce(
+            (total, item) => total + (item.product.finalPrice ?? item.product.salePrice ?? 0) * item.quantity,
+            0
+        );
 
     const handlePayment = () => {
         const accessToken = getToken();
         if (!accessToken) {
-            navigate("/login", { state: { from: "/cart" } });
+            navigate('/login', { state: { from: '/cart' } });
             return;
         }
-        navigate("/checkout", { state: { cartItems, totalPrice: getTotalPrice() } });
+        navigate('/checkout', { state: { cartItems, totalPrice: getTotalPrice() } });
     };
 
     return (
@@ -72,19 +88,28 @@ export function CartPage() {
                                 className="flex items-center p-4 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
                             >
                                 <img
-                                    src={`${API_URL}/${item.product.images?.[0] || "avatar.png"}`}
+                                    src={`${API_URL}/${item.product.images?.[0] || 'avatar.png'}`}
                                     alt={item.product.name}
                                     className="w-20 h-20 object-cover rounded-lg mr-4"
                                     onError={(e) => {
-                                        e.currentTarget.src = "/avatar.png";
+                                        e.currentTarget.src = '/avatar.png';
                                     }}
                                 />
                                 <div className="flex-1">
                                     <h3 className="text-lg font-semibold text-gray-800">{item.product.name}</h3>
                                     <p className="text-sm text-gray-600">Mã: {item.product.productCode}</p>
-                                    <p className="text-sm text-gray-600">
-                                        Đơn giá: {item.product.salePrice.toLocaleString()} VNĐ {/* Thay price bằng salePrice */}
-                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-sm text-gray-600">
+                                            Đơn giá:{' '}
+                                            {(item.product.finalPrice ?? item.product.salePrice ?? 0).toLocaleString()} VNĐ
+                                        </p>
+                                        {item.product.finalPrice != null &&
+                                            item.product.finalPrice < (item.product.salePrice ?? 0) && (
+                                                <p className="text-sm text-gray-500 line-through">
+                                                    {(item.product.salePrice ?? 0).toLocaleString()} VNĐ
+                                                </p>
+                                            )}
+                                    </div>
                                     <div className="flex items-center mt-2">
                                         <button
                                             onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
@@ -105,7 +130,7 @@ export function CartPage() {
                                     </div>
                                 </div>
                                 <div className="text-lg font-semibold text-gray-800">
-                                    {(item.product.salePrice * item.quantity).toLocaleString()} VNĐ {/* Thay price bằng salePrice */}
+                                    {((item.product.finalPrice ?? item.product.salePrice ?? 0) * item.quantity).toLocaleString()} VNĐ
                                 </div>
                                 <button
                                     onClick={() => removeFromCart(item.product.id)}

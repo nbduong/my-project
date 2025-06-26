@@ -16,7 +16,7 @@ interface CategoryFormProps {
     title: string;
 }
 
-const CategoryForm: React.FC<CategoryFormProps> = ({ category, onSubmit, onCancel, title }) => {
+const CategoryForm: React.FC<CategoryFormProps> = React.memo(({ category, onSubmit, onCancel, title }) => {
     const [formData, setFormData] = useState<Category>({ ...category });
     const [error, setError] = useState<string | null>(null);
 
@@ -48,8 +48,8 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ category, onSubmit, onCance
     }, [formData, onSubmit, validateForm]);
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-            <div className="bg-white p-6 rounded-lg w-full max-w-md sm:max-w-lg shadow-xl">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 overflow-y-auto z-50">
+            <div className="bg-white p-6 rounded-lg w-full max-w-3xl shadow-xl">
                 <h2 className="text-xl font-bold text-[#1A202C] mb-4">{title}</h2>
                 {error && (
                     <div className="bg-red-100 text-[#E53E3E] p-2 rounded mb-4 text-sm">
@@ -64,8 +64,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ category, onSubmit, onCance
                         <div key={field.name}>
                             <label
                                 htmlFor={field.name}
-                                className={`block text-sm font-medium text-[#1A202C] transition-all duration-300 ${formData[field.name as keyof Category] ? "text-[#2C5282] font-semibold" : ""
-                                    }`}
+                                className={`block text-sm font-medium text-[#1A202C] ${formData[field.name as keyof Category] ? 'text-[#2C5282] font-semibold' : ''}`}
                             >
                                 {field.label} {field.required && <span className="text-[#E53E3E]">*</span>}
                             </label>
@@ -98,7 +97,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ category, onSubmit, onCance
             </div>
         </div>
     );
-};
+});
 
 export const ManageCategory: React.FC = () => {
     const navigate = useNavigate();
@@ -114,16 +113,19 @@ export const ManageCategory: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState<string>("");
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [itemsPerPage] = useState<number>(10);
+    const API_URL = "http://localhost:8080/datn";
 
-    const checkAdmin = async (accessToken: string) => {
+    const checkAdmin = useCallback(async (accessToken: string) => {
         try {
-            const response = await fetch("http://localhost:8080/datn/users/myInfo", {
+            const response = await fetch(`${API_URL}/users/myInfo`, {
                 method: "GET",
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) throw new Error("Không thể kiểm tra quyền admin");
-
             const data = await response.json();
             if (data.result?.roles?.some((role: { name: string }) => role.name === "ADMIN")) {
                 setIsAdmin(true);
@@ -134,17 +136,19 @@ export const ManageCategory: React.FC = () => {
             console.error("Error checking admin status:", err);
             setError(err.message || "Có lỗi xảy ra khi kiểm tra quyền admin");
         }
-    };
+    }, [navigate]);
 
-    const getAllCategories = async (accessToken: string) => {
+    const getAllCategories = useCallback(async (accessToken: string) => {
         try {
-            const response = await fetch("http://localhost:8080/datn/category", {
+            const response = await fetch(`${API_URL}/category`, {
                 method: "GET",
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) throw new Error("Không thể lấy danh sách danh mục");
-
             const data = await response.json();
             const categoriesData = Array.isArray(data.result) ? data.result : data.result.data || [];
             setCategories(categoriesData);
@@ -152,27 +156,30 @@ export const ManageCategory: React.FC = () => {
             console.error("Error fetching categories:", err);
             setError(err.message || "Có lỗi xảy ra khi tải danh sách danh mục");
         }
-    };
+    }, [navigate]);
 
     const handleEditCategory = useCallback((category: Category) => {
         setSelectedCategory(category);
         setIsEditModalOpen(true);
     }, []);
 
-    const handleDeleteCategory = async (categoryId: number) => {
+    const handleDeleteCategory = useCallback(async (categoryId: number) => {
         if (!window.confirm("Bạn có chắc muốn xóa danh mục này?")) return;
         try {
-            const accessToken = getToken();
-            const response = await fetch(`http://localhost:8080/datn/category/${categoryId}`, {
+            const accessToken = await getToken();
+            if (!accessToken) throw new Error("Access token not found");
+            const response = await fetch(`${API_URL}/category/${categoryId}`, {
                 method: "DELETE",
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.message || "Không thể xóa danh mục");
             }
-
             setCategories((prev) => prev.filter((c) => c.id !== categoryId));
             setSearchTerm("");
             toast.success("Xóa danh mục thành công!");
@@ -180,7 +187,7 @@ export const ManageCategory: React.FC = () => {
             console.error("Error deleting category:", err);
             toast.error(err.message || "Có lỗi xảy ra khi xóa danh mục");
         }
-    };
+    }, [navigate]);
 
     const handleCreateCategory = useCallback(() => {
         const newCategory: Category = { id: 0, name: "", description: "" };
@@ -188,12 +195,11 @@ export const ManageCategory: React.FC = () => {
         setIsCreateModalOpen(true);
     }, []);
 
-    const handleCreateCategorySubmit = async (formData: Category) => {
+    const handleCreateCategorySubmit = useCallback(async (formData: Category) => {
         try {
-            const accessToken = getToken();
-            if (!accessToken) throw new Error("Không tìm thấy token");
-
-            const response = await fetch(`http://localhost:8080/datn/category`, {
+            const accessToken = await getToken();
+            if (!accessToken) throw new Error("Access token not found");
+            const response = await fetch(`${API_URL}/category`, {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
@@ -201,12 +207,14 @@ export const ManageCategory: React.FC = () => {
                 },
                 body: JSON.stringify(formData),
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.message || "Không thể tạo danh mục");
             }
-
             const newCategory = await response.json();
             setCategories((prev) => [...prev, newCategory.result || newCategory]);
             setIsCreateModalOpen(false);
@@ -217,14 +225,13 @@ export const ManageCategory: React.FC = () => {
             console.error("Error creating category:", err);
             toast.error(err.message || "Có lỗi xảy ra khi tạo danh mục");
         }
-    };
+    }, [navigate]);
 
-    const handleUpdateCategory = async (formData: Category) => {
+    const handleUpdateCategory = useCallback(async (formData: Category) => {
         try {
-            const accessToken = getToken();
-            if (!accessToken) throw new Error("Không tìm thấy token");
-
-            const response = await fetch(`http://localhost:8080/datn/category/${formData.id}`, {
+            const accessToken = await getToken();
+            if (!accessToken) throw new Error("Access token not found");
+            const response = await fetch(`${API_URL}/category/${formData.id}`, {
                 method: "PUT",
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
@@ -232,12 +239,14 @@ export const ManageCategory: React.FC = () => {
                 },
                 body: JSON.stringify(formData),
             });
-
+            if (response.status === 401) {
+                navigate("/login");
+                throw new Error("Phiên đăng nhập đã hết hạn");
+            }
             if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.message || "Không thể cập nhật danh mục");
             }
-
             const updatedCategory = await response.json();
             setCategories((prev) =>
                 prev.map((c) => (c.id === updatedCategory.result.id ? updatedCategory.result : c))
@@ -249,27 +258,36 @@ export const ManageCategory: React.FC = () => {
             console.error("Error updating category:", err);
             toast.error(err.message || "Có lỗi xảy ra khi cập nhật danh mục");
         }
-    };
+    }, [navigate]);
 
     useEffect(() => {
         const fetchData = async () => {
-            const accessToken = getToken();
+            const accessToken = await getToken();
             if (!accessToken) {
                 navigate("/login");
                 return;
             }
-            await Promise.all([checkAdmin(accessToken), getAllCategories(accessToken)]);
-            setIsLoading(false);
+            setIsLoading(true);
+            try {
+                await Promise.all([checkAdmin(accessToken), getAllCategories(accessToken)]);
+            } catch (err: any) {
+                setError(err.message || "Có lỗi xảy ra khi tải dữ liệu");
+            } finally {
+                setIsLoading(false);
+            }
         };
-
         fetchData();
-    }, [navigate]);
+    }, [navigate, checkAdmin, getAllCategories]);
 
     useEffect(() => {
-        if (!isLoading && !isAdmin) navigate("/");
+        if (!isLoading && !isAdmin) navigate("/home");
     }, [isLoading, isAdmin, navigate]);
 
-    // Pagination logic
+    useEffect(() => {
+        setSortDirection('asc');
+    }, [sortField]);
+
+    // Filter and sort categories
     const filteredCategories = categories.filter((category) =>
         category.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -278,7 +296,7 @@ export const ManageCategory: React.FC = () => {
         if (!sortField) return 0;
         const aValue = a[sortField] || "";
         const bValue = b[sortField] || "";
-        return sortDirection === "asc"
+        return sortDirection === 'asc'
             ? aValue.toString().localeCompare(bValue.toString())
             : bValue.toString().localeCompare(aValue.toString());
     });
@@ -289,35 +307,34 @@ export const ManageCategory: React.FC = () => {
         currentPage * itemsPerPage
     );
 
-    const handlePageChange = (page: number) => {
+    const handlePageChange = useCallback((page: number) => {
         setCurrentPage(page);
-    };
+    }, []);
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-screen bg-[#EDF2F7]">
-                <div className="flex flex-col items-center">
-                    <svg
-                        className="animate-spin h-8 w-8 text-[#2C5282]"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                    >
-                        <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                        ></circle>
-                        <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                    </svg>
-                    <span className="mt-2 text-[#1A202C]">Đang tải...</span>
+            <div className="p-4 sm:p-6 bg-[#EDF2F7]">
+                <div className="overflow-x-auto bg-white rounded-lg shadow-md">
+                    <table className="w-full border border-gray-200">
+                        <thead>
+                            <tr className="bg-gray-100 text-[#1A202C] text-sm uppercase tracking-wider">
+                                <th className="py-3 px-4 border-b text-center w-16 sm:w-20">STT</th>
+                                <th className="py-3 px-4 border-b text-center">Tên danh mục</th>
+                                <th className="py-3 px-4 border-b text-center">Mô tả</th>
+                                <th className="py-3 px-4 border-b text-center w-32">Hành động</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {Array.from({ length: itemsPerPage }).map((_, idx) => (
+                                <tr key={idx}>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                    <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         );
@@ -338,7 +355,7 @@ export const ManageCategory: React.FC = () => {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
                     <button
                         onClick={handleCreateCategory}
-                        className="bg-[#2C5282] text-white px-4 py-2 rounded-md hover:bg-[#3182CE] transition-all duration-200 w-full sm:w-auto"
+                        className="w-full sm:w-auto bg-[#2C5282] text-white px-4 py-2 rounded-md hover:bg-[#3182CE] transition-all duration-200"
                     >
                         + Tạo danh mục mới
                     </button>
@@ -347,35 +364,62 @@ export const ManageCategory: React.FC = () => {
                         placeholder="Tìm kiếm danh mục..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="border border-gray-300 px-3 py-2 rounded-md w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
+                        className="w-full sm:w-64 border text-sm border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
                     />
                 </div>
-                <select
-                    value={sortField}
-                    onChange={(e) => {
-                        setSortField(e.target.value as keyof Category);
-                        setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
-                    }}
-                    className="border border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200 w-full sm:w-auto"
-                >
-                    <option value="">-- Sắp xếp theo --</option>
-                    <option value="name">Tên danh mục {sortDirection === "asc" ? "↑" : "↓"}</option>
-                </select>
+                <div className="flex flex-col space-y-2">
+                    <div>
+                        <label className="block text-sm font-medium text-[#1A202C] mb-1">Sắp xếp theo</label>
+                        <select
+                            value={sortField}
+                            onChange={(e) => setSortField(e.target.value as keyof Category | "")}
+                            className="w-full sm:w-48 border text-sm border-gray-300 px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3182CE] transition-all duration-200"
+                        >
+                            <option value="">-- Chọn kiểu sắp xếp --</option>
+                            <option value="name">Tên danh mục</option>
+                            <option value="description">Mô tả</option>
+                        </select>
+                    </div>
+                    <div className="flex space-x-4">
+                        <label className="inline-flex items-center">
+                            <input
+                                type="radio"
+                                name="sortDirection"
+                                value="asc"
+                                checked={sortDirection === 'asc'}
+                                onChange={() => setSortDirection('asc')}
+                                className="form-radio h-4 w-4 text-[#3182CE] focus:ring-[#3182CE]"
+                            />
+                            <span className="ml-2 text-sm text-[#1A202C]">Tăng</span>
+                        </label>
+                        <label className="inline-flex items-center">
+                            <input
+                                type="radio"
+                                name="sortDirection"
+                                value="desc"
+                                checked={sortDirection === 'desc'}
+                                onChange={() => setSortDirection('desc')}
+                                className="form-radio h-4 w-4 text-[#3182CE] focus:ring-[#3182CE]"
+                            />
+                            <span className="ml-2 text-sm text-[#1A202C]">Giảm</span>
+                        </label>
+                    </div>
+                </div>
             </div>
-            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
-                <table className="min-w-full border border-gray-200">
+            <div className="overflow-x-auto bg-white rounded-lg shadow-md">
+                <table className="w-full border border-gray-200">
                     <thead>
-                        <tr className="bg-[#2C5282] text-white text-sm uppercase tracking-wider">
-                            <th className="py-3 px-4 border-b border-gray-200 text-center w-16 sm:w-20">ID</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-left">Tên danh mục</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-left">Mô tả</th>
-                            <th className="py-3 px-4 border-b border-gray-200 text-center w-24 sm:w-32">Hành động</th>
+                        <tr className="bg-gray-100 text-[#1A202C] text-sm uppercase tracking-wider">
+                            <th className="py-3 px-4 border-b text-center w-16 sm:w-20">STT</th>
+                            <th className="py-3 px-4 border-b text-center">Tên danh mục</th>
+                            <th className="py-3 px-4 border-b text-center">Mô tả</th>
+                            <th className="py-3 px-4 border-b text-center w-32">Hành động</th>
                         </tr>
                     </thead>
                     <tbody>
                         {isLoading ? (
-                            Array.from({ length: itemsPerPage }).map((_, index) => (
-                                <tr key={index}>
+                            Array.from({ length: itemsPerPage }).map((_, idx) => (
+                                <tr key={idx}>
                                     <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
                                     <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
                                     <td className="py-3 px-4"><div className="animate-pulse h-4 bg-gray-200 rounded"></div></td>
@@ -383,63 +427,66 @@ export const ManageCategory: React.FC = () => {
                                 </tr>
                             ))
                         ) : paginatedCategories.length > 0 ? (
-                            paginatedCategories.map((category, index) => (
+                            paginatedCategories.map((category, idx) => (
                                 <tr
                                     key={category.id}
-                                    className={`border-b border-gray-200 ${index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                                        } hover:bg-[#EDF2F7] transition-colors duration-200`}
+                                    className={`border-b ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-gray-100 transition-colors duration-200`}
                                 >
-                                    <td className="py-3 px-4 text-center text-[#1A202C]">{category.id}</td>
-                                    <td className="py-3 px-4 text-[#1A202C] truncate">{category.name}</td>
-                                    <td className="py-3 px-4 text-[#1A202C] truncate">{category.description}</td>
+                                    <td className="py-3 px-4 text-center text-[#1A202C]">
+                                        {(currentPage - 1) * itemsPerPage + idx + 1}
+                                    </td>
+                                    <td className="py-3 px-4 text-center text-[#1A202C] truncate">{category.name}</td>
+                                    <td className="py-3 px-4 text-center text-[#1A202C] truncate">{category.description}</td>
                                     <td className="py-3 px-4 text-center">
-                                        <button
-                                            onClick={() => handleEditCategory(category)}
-                                            className="text-[#3182CE] hover:text-[#2C5282] transition-colors duration-200 mr-2 sm:mr-4"
-                                            title="Chỉnh sửa"
-                                        >
-                                            <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                strokeWidth="1.5"
-                                                stroke="currentColor"
-                                                className="w-5 h-5"
+                                        <div className="flex justify-center items-center space-x-2">
+                                            <button
+                                                onClick={() => handleEditCategory(category)}
+                                                className="text-blue-500 hover:text-blue-600 transition-colors duration-200"
+                                                title="Chỉnh sửa"
                                             >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
-                                                />
-                                            </svg>
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteCategory(category.id)}
-                                            className="text-[#E53E3E] hover:text-red-700 transition-colors duration-200"
-                                            title="Xóa"
-                                        >
-                                            <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                strokeWidth="1.5"
-                                                stroke="currentColor"
-                                                className="w-5 h-5"
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    strokeWidth="1.5"
+                                                    stroke="currentColor"
+                                                    className="w-5 h-5"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7m-1.5-4.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                                                    />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteCategory(category.id)}
+                                                className="text-red-500 hover:text-red-600 transition-colors duration-200"
+                                                title="Xóa"
                                             >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
-                                                />
-                                            </svg>
-                                        </button>
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    strokeWidth="1.5"
+                                                    stroke="currentColor"
+                                                    className="w-5 h-5"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        d="M6 18L18 6M6 6l12 12"
+                                                    />
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={4} className="py-3 px-4 text-center text-[#1A202C]">
-                                    Không có danh mục
+                                <td colSpan={4} className="py-3 px-4 text-center text-[#666]">
+                                    Không tìm thấy danh mục
                                 </td>
                             </tr>
                         )}
@@ -452,10 +499,7 @@ export const ManageCategory: React.FC = () => {
                     <button
                         onClick={() => handlePageChange(currentPage - 1)}
                         disabled={currentPage === 1}
-                        className={`px-3 py-1 rounded-md ${currentPage === 1
-                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                            : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
-                            } transition-all duration-200`}
+                        className={`px-3 py-1 rounded-md text-sm ${currentPage === 1 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'} transition-colors duration-200`}
                     >
                         Trước
                     </button>
@@ -463,10 +507,7 @@ export const ManageCategory: React.FC = () => {
                         <button
                             key={page}
                             onClick={() => handlePageChange(page)}
-                            className={`px-3 py-1 rounded-md ${currentPage === page
-                                ? "bg-[#3182CE] text-white"
-                                : "bg-white text-[#1A202C] hover:bg-[#EDF2F7]"
-                                } transition-all duration-200`}
+                            className={`px-3 py-1 rounded-md text-sm ${currentPage === page ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'} transition-all duration-200 border border-gray-200`}
                         >
                             {page}
                         </button>
@@ -474,10 +515,7 @@ export const ManageCategory: React.FC = () => {
                     <button
                         onClick={() => handlePageChange(currentPage + 1)}
                         disabled={currentPage === totalPages}
-                        className={`px-3 py-1 rounded-md ${currentPage === totalPages
-                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                            : "bg-[#2C5282] text-white hover:bg-[#3182CE]"
-                            } transition-all duration-200`}
+                        className={`px-3 py-1 rounded-md text-sm ${currentPage === totalPages ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'} transition-colors duration-200`}
                     >
                         Sau
                     </button>

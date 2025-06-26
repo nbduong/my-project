@@ -3,10 +3,20 @@ export interface Product {
   id: string;
   name: string;
   productCode: string;
-  salePrice: number;
+  salePrice: number | null; // Allow null to match backend
+  finalPrice?: number | null; // For discounts
+  discountPercent?: number | null;
+  discountAmount?: number | null;
+  discountCode?: string | null;
   images: string[];
   brandName?: string;
   categoryName?: string;
+  description?: string | null;
+  quantity?: number;
+  specifications?: { [key: string]: string };
+  status?: string;
+  viewCount?: number;
+  isDeleted?: boolean;
 }
 
 export interface CartItem {

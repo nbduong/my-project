@@ -3,7 +3,30 @@ import { useNavigate } from "react-router-dom";
 import { toast } from 'react-toastify';
 import { getToken } from "../../services/localStorageService";
 
-// Interface definitions remain unchanged
+// Enum for DiscountType
+enum DiscountType {
+    PERCENTAGE = "PERCENTAGE",
+    FIXED_AMOUNT = "FIXED_AMOUNT"
+}
+
+// Updated Discount interface to match DiscountResponse
+interface Discount {
+    id: string;
+    startDate: string;
+    endDate: string;
+    discountPercent: number | null;
+    discountAmount: number | null;
+    isGlobal: boolean;
+    code: string;
+    status: string;
+    quantity: number;
+    createdBy: string;
+    lastModifiedBy: string;
+    createdDate: string;
+    lastModifiedDate: string;
+    type: DiscountType;
+}
+
 interface Category {
     id: number;
     name: string;
@@ -15,11 +38,6 @@ interface Brand {
     name: string;
 }
 
-interface Discount {
-    id: string;
-    code: string;
-}
-
 interface Product {
     id: string;
     name: string;
@@ -28,6 +46,7 @@ interface Product {
     salePrice: number;
     quantity: number;
     discountPercent: number | null;
+    discountAmount: number | null;
     discountCode: string | null;
     discountId: string | null;
     finalPrice: number | null;
@@ -85,7 +104,8 @@ const ProductForm: React.FC<ProductFormProps> = React.memo(
                     discountId: null,
                     finalPrice: null,
                     discountCode: '',
-                    discountPercent: 0,
+                    discountPercent: null,
+                    discountAmount: null,
                     categoryId: '',
                     categoryName: '',
                     brandId: '',
@@ -281,9 +301,7 @@ const ProductForm: React.FC<ProductFormProps> = React.memo(
                                     id="quantity"
                                     value={formData.quantity || 0}
                                     onChange={(e) => handleInputChange('quantity', Number(e.target.value))}
-                                    className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] borderを行い
-
-                                    border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
+                                    className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
                                     required
                                     min="0"
                                 />
@@ -320,13 +338,16 @@ const ProductForm: React.FC<ProductFormProps> = React.memo(
                                         const code = e.target.value || undefined;
                                         setSelectedDiscountCode(code);
                                         handleInputChange('discountId', code ? discounts.find((d) => d.code === code)?.id || null : null);
+                                        const discount = discounts.find((d) => d.code === code);
+                                        handleInputChange('discountPercent', discount?.type === DiscountType.PERCENTAGE ? discount?.discountPercent || null : null);
+                                        handleInputChange('discountAmount', discount?.type === DiscountType.FIXED_AMOUNT ? discount?.discountAmount || null : null);
                                     }}
                                     className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
                                 >
                                     <option value="">-- Chọn mã giảm giá --</option>
                                     {discounts.map((discount) => (
                                         <option key={discount.id} value={discount.code}>
-                                            {discount.code}
+                                            {discount.code} ({discount.type === DiscountType.PERCENTAGE ? `${discount.discountPercent}%` : `${discount.discountAmount?.toLocaleString()} VNĐ`})
                                         </option>
                                     ))}
                                 </select>
@@ -494,8 +515,9 @@ const ProductForm: React.FC<ProductFormProps> = React.memo(
     }
 );
 
-const ViewProductModal: React.FC<{ product: Product; discounts: Discount[]; onClose: () => void }> = ({ product, onClose }) => {
+const ViewProductModal: React.FC<{ product: Product; discounts: Discount[]; onClose: () => void }> = ({ product, discounts, onClose }) => {
     const API_URL = 'http://localhost:8080/datn';
+    const discount = product.discountId ? discounts.find((d) => d.id === product.discountId) : null;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start p-4 overflow-y-auto z-50">
@@ -533,7 +555,14 @@ const ViewProductModal: React.FC<{ product: Product; discounts: Discount[]; onCl
                                 { label: 'Giá bán', value: `${product.salePrice.toLocaleString()} VNĐ` },
                                 { label: 'Giá cuối cùng', value: product.finalPrice ? `${product.finalPrice.toLocaleString()} VNĐ` : 'N/A' },
                                 { label: 'Mã giảm giá', value: product.discountCode || 'Không áp dụng giảm giá' },
-                                { label: 'Phần trăm giảm giá', value: product.discountPercent || 'Không áp dụng giảm giá' },
+                                {
+                                    label: 'Giảm giá',
+                                    value: discount
+                                        ? discount.type === DiscountType.PERCENTAGE
+                                            ? `${discount.discountPercent?.toLocaleString()}%`
+                                            : `${discount.discountAmount?.toLocaleString()} VNĐ`
+                                        : 'Không áp dụng giảm giá'
+                                },
                                 { label: 'Số lượng', value: product.quantity.toLocaleString() },
                             ].map(({ label, value }) => (
                                 <div key={label}>
@@ -794,7 +823,8 @@ export const ManageProduct: React.FC = () => {
             salePrice: 0,
             discountId: null,
             finalPrice: null,
-            discountPercent: 0,
+            discountPercent: null,
+            discountAmount: null,
             discountCode: '',
             categoryId: '',
             categoryName: '',
@@ -1184,7 +1214,7 @@ export const ManageProduct: React.FC = () => {
                                                     strokeLinecap="round"
                                                     strokeLinejoin="round"
                                                 >
-                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2 2v-7"></path>
                                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                                 </svg>
                                             </button>

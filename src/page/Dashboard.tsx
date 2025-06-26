@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -11,6 +12,10 @@ interface Product {
   name: string;
   productCode: string;
   salePrice: number;
+  finalPrice?: number | null;
+  discountPercent?: number | null;
+  discountAmount?: number | null;
+  discountCode?: string | null;
   quantity: number;
   brandName: string;
   categoryName: string;
@@ -31,11 +36,8 @@ interface Category {
   name: string;
 }
 
-
-
 const API_URL = 'http://localhost:8080/datn';
 
-// Reusable Product Card Component
 export const ProductCard: React.FC<{
   product: Product;
   onClick: (id: string) => void;
@@ -47,6 +49,18 @@ export const ProductCard: React.FC<{
     }
   };
 
+  if (product.finalPrice === null || product.salePrice == null) {
+    console.warn(`Invalid price for product ${product.id}:`, {
+      salePrice: product.salePrice,
+      finalPrice: product.finalPrice,
+    });
+  }
+
+  const isDiscounted =
+    product.finalPrice != null &&
+    product.salePrice != null &&
+    product.finalPrice < product.salePrice;
+
   return (
     <div
       onClick={() => onClick(product.id)}
@@ -54,8 +68,13 @@ export const ProductCard: React.FC<{
       tabIndex={0}
       role="button"
       aria-label={`View details for ${product.name}`}
-      className="border rounded-lg shadow-md p-4 bg-white hover:shadow-xl transition-shadow duration-200 cursor-pointer flex flex-col h-full"
+      className="border rounded-lg shadow-md p-4 bg-white hover:shadow-xl transition-shadow duration-200 cursor-pointer flex flex-col h-full relative"
     >
+      {isDiscounted && (
+        <span className="absolute top-2 right-2 bg-[#EF4444] text-white text-xs font-semibold px-2 py-1 rounded">
+          Sale
+        </span>
+      )}
       <img
         src={product.images[0] ? `${API_URL}/${product.images[0]}` : '/avatar.png'}
         alt={`${product.brandName} ${product.name} (${product.categoryName})`}
@@ -65,13 +84,28 @@ export const ProductCard: React.FC<{
       />
       <h3 className="text-sm font-semibold text-[#1F2937] line-clamp-2">{product.name}</h3>
       <p className="text-xs text-gray-500 mt-1">Code: {product.productCode}</p>
-      <p className="text-base font-semibold text-[#1F2937] mt-1">{product.salePrice.toLocaleString()} VNĐ</p>
+      <div className="mt-1 flex items-center gap-2">
+        {isDiscounted ? (
+          <>
+            <p className="text-base font-semibold text-[#EF4444]">
+              {(product.finalPrice ?? product.salePrice)?.toLocaleString()} VNĐ
+            </p>
+            <p className="text-sm text-gray-500 line-through">
+              {product.salePrice.toLocaleString()} VNĐ
+            </p>
+          </>
+        ) : (
+          <p className="text-base font-semibold text-[#1F2937]">
+            {(product.salePrice ?? 0).toLocaleString()} VNĐ
+          </p>
+        )}
+      </div>
       <div className="mt-auto flex items-center justify-between">
         <div className="text-xs flex items-center">
           {product.quantity > 0 ? (
             <>
               <svg className="w-5 h-5 mr-1 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M5 13l4 4L19 7" />
               </svg>
               In Stock
             </>

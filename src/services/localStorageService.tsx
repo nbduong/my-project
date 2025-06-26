@@ -1,3 +1,6 @@
+// src/services/localStorageService.tsx
+import { CartItem } from '../services/types'; // Adjust path as needed
+
 export const KEY_TOKEN = "accessToken";
 
 export const setToken = (token: string) => {
@@ -12,22 +15,6 @@ export const removeToken = () => {
   console.log("remove");
   return localStorage.removeItem(KEY_TOKEN);
 };
-
-// Cập nhật interface Product
-interface Product {
-  id: string;
-  name: string;
-  productCode: string;
-  salePrice: number; // Thay price bằng salePrice
-  images: string[];
-  brandName?: string;
-  categoryName?: string;
-}
-
-interface CartItem {
-  product: Product;
-  quantity: number;
-}
 
 export const loadCart = (): CartItem[] => {
   try {
@@ -45,8 +32,20 @@ export const loadCart = (): CartItem[] => {
             item.quantity > 0
         )
       ) {
-        console.log('loadCart: Valid cart data loaded:', parsedCart);
-        return parsedCart;
+        // Sanitize prices
+        const sanitizedCart = parsedCart.map((item: CartItem) => ({
+          product: {
+            ...item.product,
+            salePrice: item.product.salePrice ?? 0,
+            finalPrice: item.product.finalPrice ?? null,
+            discountPercent: item.product.discountPercent ?? null,
+            discountAmount: item.product.discountAmount ?? null,
+            discountCode: item.product.discountCode ?? null,
+          },
+          quantity: item.quantity,
+        }));
+        console.log('loadCart: Valid cart data loaded:', sanitizedCart);
+        return sanitizedCart;
       } else {
         console.warn('loadCart: Invalid cart data format, returning empty array');
         return [];
@@ -73,8 +72,20 @@ export const saveCart = (cartItems: CartItem[]): void => {
             item.quantity > 0
         ))
     ) {
-      console.log('saveCart: Saving cart to localStorage:', cartItems);
-      localStorage.setItem('cart', JSON.stringify(cartItems));
+      // Sanitize prices
+      const sanitizedCart = cartItems.map((item) => ({
+        product: {
+          ...item.product,
+          salePrice: item.product.salePrice ?? 0,
+          finalPrice: item.product.finalPrice ?? null,
+          discountPercent: item.product.discountPercent ?? null,
+          discountAmount: item.product.discountAmount ?? null,
+          discountCode: item.product.discountCode ?? null,
+        },
+        quantity: item.quantity,
+      }));
+      console.log('saveCart: Saving cart to localStorage:', sanitizedCart);
+      localStorage.setItem('cart', JSON.stringify(sanitizedCart));
     } else {
       console.warn('saveCart: Invalid cart data, not saving:', cartItems);
     }
