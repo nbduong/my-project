@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -38,11 +37,13 @@ interface Category {
 
 const API_URL = 'http://localhost:8080/datn';
 
-export const ProductCard: React.FC<{
+interface ProductCardProps {
   product: Product;
   onClick: (id: string) => void;
-}> = ({ product, onClick }) => {
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+}
+
+export const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onClick(product.id);
@@ -76,10 +77,10 @@ export const ProductCard: React.FC<{
         </span>
       )}
       <img
-        src={product.images[0] ? `${API_URL}/${product.images[0]}` : '/avatar.png'}
+        src={product.images[0] ? `${API_URL}/${product.images[0]}` : '/logo.png'}
         alt={`${product.brandName} ${product.name} (${product.categoryName})`}
         className="w-full h-40 object-contain rounded-md mb-2"
-        onError={(e) => { e.currentTarget.src = '/avatar.png'; }}
+        onError={(e) => { e.currentTarget.src = '/logo.png'; }}
         loading="lazy"
       />
       <h3 className="text-sm font-semibold text-[#1F2937] line-clamp-2">{product.name}</h3>
@@ -128,7 +129,6 @@ export const ProductCard: React.FC<{
   );
 };
 
-// Category Icons (Moved from Layout for consistency, ideally in a shared utility)
 const getCategoryIcon = (categoryName: string) => {
   const iconClass = 'w-5 h-5 mr-2';
   switch (categoryName) {
@@ -244,9 +244,8 @@ export const Dashboard: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [showCategories, setShowCategories] = useState(false);
+  const [showCategories, setShowCategories] = useState<boolean>(false);
 
-  // Memoized carousel banners
   const carouselBanners = useMemo<Banner[]>(() => [
     {
       id: '1',
@@ -284,16 +283,15 @@ export const Dashboard: React.FC = () => {
     adaptiveHeight: true,
   }), []);
 
-  // Fetch products
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
       const response = await axios.get(`${API_URL}/products`);
-      const productsData = Array.isArray(response.data.result)
+      const productsData: Product[] = Array.isArray(response.data.result)
         ? response.data.result
         : response.data.result?.data || [];
       if (!Array.isArray(productsData)) throw new Error('Invalid product data format');
-      setProducts(productsData.filter((p: Product) => !p.isDeleted));
+      setProducts(productsData.filter((p) => !p.isDeleted));
     } catch (err) {
       toast.error(axios.isAxiosError(err) ? err.message : 'Failed to load products');
     } finally {
@@ -301,11 +299,10 @@ export const Dashboard: React.FC = () => {
     }
   }, []);
 
-  // Fetch categories
   const fetchCategories = useCallback(async () => {
     try {
       const response = await axios.get(`${API_URL}/category`);
-      const categoriesData = Array.isArray(response.data.result)
+      const categoriesData: Category[] = Array.isArray(response.data.result)
         ? response.data.result
         : response.data.result?.data || [];
       if (!Array.isArray(categoriesData)) throw new Error('Invalid category data format');
@@ -320,28 +317,33 @@ export const Dashboard: React.FC = () => {
     fetchCategories();
   }, [fetchProducts, fetchCategories]);
 
-  // Handle product click
   const handleProductClick = useCallback((productId: string) => {
     navigate(`/product/${productId}`);
   }, [navigate]);
 
-  // Handle category click
   const handleCategoryClick = useCallback((category: string) => {
     navigate(`/products?categoryName=${encodeURIComponent(category)}`);
     setShowCategories(false);
   }, [navigate]);
 
-  // Group products by category
   const groupedProducts = useMemo(() => {
-    return products.reduce((acc, product) => {
+    return products.reduce((acc: { [key: string]: Product[] }, product) => {
       const category = product.categoryName || 'Other';
       if (!acc[category]) acc[category] = [];
       acc[category].push(product);
       return acc;
-    }, {} as { [key: string]: Product[] });
+    }, {});
   }, [products]);
 
-  // Skeleton loader
+  const discountedProducts = useMemo(() => {
+    return products.filter(
+      (product) =>
+        product.finalPrice != null &&
+        product.salePrice != null &&
+        product.finalPrice < product.salePrice
+    );
+  }, [products]);
+
   const renderSkeleton = () => (
     <div className="animate-pulse space-y-6">
       <div className="h-[200px] sm:h-[300px] md:h-[400px] bg-gray-200 rounded-lg"></div>
@@ -364,7 +366,10 @@ export const Dashboard: React.FC = () => {
       <div className="container mx-auto p-4 text-center text-gray-600">
         No products or categories found
         <button
-          onClick={() => { fetchProducts(); fetchCategories(); }}
+          onClick={() => {
+            fetchProducts();
+            fetchCategories();
+          }}
           className="ml-4 px-4 py-2 bg-[#3B82F6] text-white rounded hover:bg-[#2563EB] transition-colors"
         >
           Retry
@@ -401,7 +406,9 @@ export const Dashboard: React.FC = () => {
                 <li
                   key={category.id}
                   onClick={() => handleCategoryClick(category.name)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleCategoryClick(category.name); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') handleCategoryClick(category.name);
+                  }}
                   tabIndex={0}
                   role="button"
                   aria-label={`View ${category.name} products`}
@@ -425,37 +432,32 @@ export const Dashboard: React.FC = () => {
                   onError={(e) => { e.currentTarget.src = '/avatar.png'; }}
                   onClick={() => navigate(banner.ctaLink)}
                 />
-                {/* <div className="absolute inset-0 bg-black bg-opacity-40 flex flex-col items-center justify-center text-white p-4">
-                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-center">{banner.headline}</h2>
-                  <button
-                    onClick={() => navigate(banner.ctaLink)}
-                    className="mt-4 px-4 py-2 bg-[#3B82F6] rounded hover:bg-[#2563EB] transition-colors"
-                    aria-label={banner.ctaText}
-                  >
-                    {banner.ctaText}
-                  </button>
-                </div> */}
               </div>
             ))}
           </Slider>
           <div className="mt-8 bg-white p-4 rounded-lg shadow">
             <h2 className="text-xl font-bold text-[#1F2937] mb-4 flex items-center border-b-2 border-gray-200">
-              Tất cả sản phẩm
+              Các sản phẩm đang sale
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {products.slice(0, 9).map((product) => (
+              {discountedProducts.slice(0, 9).map((product) => (
                 <ProductCard key={product.id} product={product} onClick={handleProductClick} />
               ))}
             </div>
-            {products.length > 9 && (
+            {discountedProducts.length > 9 && (
               <div className="text-center mt-4">
                 <button
                   className="px-4 py-2 bg-[#3B82F6] text-white rounded hover:bg-[#2563EB] transition-colors"
-                  onClick={() => navigate('/products?categoryName=All')}
-                  aria-label="View more products"
+                  onClick={() => navigate('/products?categoryName=All&onSale=true')}
+                  aria-label="View more discounted products"
                 >
                   View More
                 </button>
+              </div>
+            )}
+            {discountedProducts.length === 0 && (
+              <div className="text-center text-gray-600">
+                Hiện tại không có sản phẩm đang sale
               </div>
             )}
           </div>

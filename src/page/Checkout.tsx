@@ -55,11 +55,6 @@ export function CheckoutPage() {
 
     // Validate cart items and stock
     useEffect(() => {
-        if (!cartItems.length) {
-            toast.error('Giỏ hàng trống. Vui lòng thêm sản phẩm.');
-            navigate('/cart');
-            return;
-        }
         const invalidItems = cartItems.filter(
             (item) => item.product.quantity != null && item.quantity > item.product.quantity
         );

@@ -69,6 +69,7 @@ const DiscountForm: React.FC<DiscountFormProps> = React.memo(({ discount, onSubm
     });
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const isStartDatePassed = new Date(discount.startDate) < new Date();
 
     const handleInputChange = useCallback((field: keyof Discount, value: string | number | boolean | null) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -178,9 +179,13 @@ const DiscountForm: React.FC<DiscountFormProps> = React.memo(({ discount, onSubm
                             id="startDate"
                             value={formData.startDate || ""}
                             onChange={(e) => handleInputChange("startDate", e.target.value)}
-                            className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200"
+                            className="w-full mt-1 px-3 py-2 text-sm rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#3182CE] border border-gray-300 hover:border-[#2C5282] transition-all duration-200 disabled:bg-gray-100 disabled:cursor-not-allowed"
                             required
+                            disabled={isStartDatePassed}
                         />
+                        {isStartDatePassed && (
+                            <p className="text-xs text-[#E53E3E] mt-1">Không thể chỉnh sửa ngày bắt đầu vì đã qua.</p>
+                        )}
                     </div>
                     <div>
                         <label
@@ -482,13 +487,17 @@ export const ManageDiscount: React.FC = () => {
             try {
                 const accessToken = await getToken();
                 if (!accessToken) throw new Error("Access token không tồn tại");
+                const updatedFormData: DiscountFormData = {
+                    ...formData,
+                    startDate: selectedDiscount!.startDate, // Keep original startDate
+                };
                 const response = await fetch(`${API_URL}/discounts/${selectedDiscount!.id}`, {
                     method: "PUT",
                     headers: {
                         Authorization: `Bearer ${accessToken}`,
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify(formData),
+                    body: JSON.stringify(updatedFormData),
                 });
                 if (response.status === 401) {
                     navigate("/login");
@@ -758,7 +767,7 @@ export const ManageDiscount: React.FC = () => {
                                                     strokeLinecap="round"
                                                     strokeLinejoin="round"
                                                 >
-                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2 2v-7"></path>
                                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                                 </svg>
                                             </button>
