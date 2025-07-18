@@ -3,7 +3,7 @@ import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { toast } from "react-toastify";
 import { getToken, saveCart } from "../services/localStorageService";
 
-// Interface for Product
+// Interface definitions remain unchanged
 interface Product {
     id: string;
     name: string;
@@ -29,7 +29,6 @@ interface CartItem {
     quantity: number;
 }
 
-// Interface for Comment
 interface Comment {
     id: string;
     content: string;
@@ -37,14 +36,12 @@ interface Comment {
     createdDate: string;
 }
 
-// Interface for Comment Request
 interface CommentRequest {
     content: string;
     productId: string;
     userId: string;
 }
 
-// Interface for OutletContext
 interface OutletContext {
     addToCart: (product: Product, quantity: number) => void;
 }
@@ -73,12 +70,9 @@ export default function ProductDetails() {
     const lastScrollY = useRef(0);
     const accessToken = getToken();
 
-    // Check login and fetch user info
+    // Fetch user info only if token exists (for commenting)
     useEffect(() => {
-        if (!accessToken) {
-            navigate("/login", { state: { from: `/product/${id}` } });
-            return;
-        }
+        if (!accessToken) return; // Skip if no token
 
         const fetchUserInfo = async () => {
             try {
@@ -90,7 +84,6 @@ export default function ProductDetails() {
                 });
 
                 if (!response.ok) {
-                    navigate("/login", { state: { from: `/product/${id}` } });
                     throw new Error(`Lỗi khi lấy thông tin user: ${response.statusText}`);
                 }
 
@@ -98,14 +91,13 @@ export default function ProductDetails() {
                 setUserId(data.result.id);
             } catch (err: any) {
                 console.error("Failed to fetch user info:", err);
-                navigate("/login", { state: { from: `/product/${id}` } });
             }
         };
 
         fetchUserInfo();
-    }, [accessToken, navigate, id]);
+    }, [accessToken]);
 
-    // Fetch product details
+    // Fetch product details (no auth required)
     useEffect(() => {
         if (!id) {
             setError("Không tìm thấy ID sản phẩm.");
@@ -118,16 +110,10 @@ export default function ProductDetails() {
                 setIsLoading(true);
                 const response = await fetch(`${API_URL}/products/${id}`, {
                     method: "GET",
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                    },
+                    // No Authorization header to allow unauthenticated access
                 });
 
                 if (!response.ok) {
-                    if (response.status === 401 || response.status === 403) {
-                        toast.error("Vui lòng đăng nhập để xem sản phẩm.");
-                        navigate("/login", { state: { from: `/product/${id}` } });
-                    }
                     throw new Error(`Lỗi khi lấy sản phẩm: ${response.statusText}`);
                 }
 
@@ -146,9 +132,9 @@ export default function ProductDetails() {
         };
 
         fetchProduct();
-    }, [id, navigate, accessToken]);
+    }, [id]);
 
-    // Fetch comments
+    // Fetch comments (no auth required)
     useEffect(() => {
         if (!id) return;
 
@@ -157,9 +143,7 @@ export default function ProductDetails() {
                 setIsLoadingComments(true);
                 const response = await fetch(`${API_URL}/comment/${id}`, {
                     method: "GET",
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                    },
+                    // No Authorization header to allow unauthenticated access
                 });
 
                 if (!response.ok) {
@@ -176,9 +160,9 @@ export default function ProductDetails() {
         };
 
         fetchComments();
-    }, [id, accessToken]);
+    }, [id]);
 
-    // Handle comment submission
+    // Handle comment submission (requires auth)
     const handleCommentSubmit = useCallback(
         async (e: React.FormEvent) => {
             e.preventDefault();
@@ -226,9 +210,15 @@ export default function ProductDetails() {
         [id, userId, commentInput, navigate, accessToken]
     );
 
-    // Handle comment deletion
+    // Handle comment deletion (requires auth)
     const handleDeleteComment = useCallback(
         async (commentId: string) => {
+            if (!accessToken || !userId) {
+                toast.error("Vui lòng đăng nhập để xóa bình luận.");
+                navigate("/login", { state: { from: `/product/${id}` } });
+                return;
+            }
+
             try {
                 const response = await fetch(`${API_URL}/comment/${commentId}`, {
                     method: "DELETE",
@@ -251,10 +241,10 @@ export default function ProductDetails() {
                 toast.error(err.message || "Không thể xóa bình luận.");
             }
         },
-        [id, navigate, accessToken]
+        [id, navigate, accessToken, userId]
     );
 
-    // Fetch related products
+    // Fetch related products (no auth required)
     useEffect(() => {
         if (!product || !id) return;
 
@@ -263,9 +253,7 @@ export default function ProductDetails() {
                 setIsLoadingRelated(true);
                 const response = await fetch(`${API_URL}/products?category=${product.categoryName}`, {
                     method: "GET",
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                    },
+                    // No Authorization header to allow unauthenticated access
                 });
 
                 if (!response.ok) {
@@ -283,7 +271,7 @@ export default function ProductDetails() {
         };
 
         fetchRelatedProducts();
-    }, [product, id, accessToken]);
+    }, [product, id]);
 
     // Handle sticky button visibility on scroll
     useEffect(() => {
@@ -409,7 +397,9 @@ export default function ProductDetails() {
     return (
         <div className="container mx-auto p-4 sm:p-6 bg-[#F3F4F6] min-h-screen">
             {/* Main Product Section */}
-            <div className="flex flex-col lg:flex-row gap-8 bg-white p-4 sm:p-6 rounded-lg shadow-md relative">
+            <div className="flex flex-col lg:flex-row
+
+ gap-8 bg-white p-4 sm:p-6 rounded-lg shadow-md relative">
                 {isDiscounted && (
                     <span className="absolute top-4 right-4 bg-[#EF4444] text-white text-xs font-semibold px-2 py-1 rounded">
                         Sale
@@ -591,6 +581,7 @@ export default function ProductDetails() {
                             className="p-2 bg-[#1DA1F2] text-white rounded-full hover:bg-[#1A91DA] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                             aria-label="Chia sẻ trên Twitter"
                         >
+
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M23.4 4.8a9.5 9.5 0 0 1-2.7.7 4.7 4.7 0 0 0 2-2.6 9.5 9.5 0 0 1-3 .1 4.7 4.7 0 0 0-8 4.3A13.3 13.3 0 0 1 1.6 2.5a4.7 4.7 0 0 0 1.5 6.3A4.7 4.7 0 0 1 .9 8v.1a4.7 4.7 0 0 0 3.8 4.6 4.7 4.7 0 0 1-2.1.1 4.7 4.7 0 0 0 4.4 3.3 9.5 9.5 0 0 1-5.9 2 9.5 9.5 0 0 1-1.1-.1 13.3 13.3 0 0 0 7.2 2.1c8.6 0 13.3-7.1 13.3-13.3 0-.2 0-.4-.1-.6a9.5 9.5 0 0 0 2.3-2.4z" />
                             </svg>
@@ -600,8 +591,8 @@ export default function ProductDetails() {
                             className="p-2 bg-[#25D366] text-white rounded-full hover:bg-[#20BD57] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                             aria-label="Chia sẻ trên WhatsApp"
                         >
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M12 0a12 12 0 0 0-12 12c0 2.5.8 4.9 2.2 6.9L0 24l5.2-1.6A12 12 0 0 0 24 12 12 12 0 0 0 12 0zm6.6 17.6c-.3.8-1.5 1.5-2.3 1.7-1 .2-2.3.1-3.6-.5-1.5-.7-3-1.8-4.2-3.1-.9-.9-1.7-2-2-3.2-.3-1.2 0-2.4.6-3.3.3-.5.7-.8 1.2-.8h.4c.4 0 .8.2 1.1.6.4.5 1.2 1.5 1.3 1.6.1.2.2.4.1.6-.1.2-.3.5-.5.7-.2.2-.4.4-.5.6-.2.2-.2.5 0 .7.5.8 1.2 1.5 2 2.2.8.6 1.6 1.1 2.5 1.4.2.1.4.1.6-.1.2-.2.5-.4.7-.6.2-.2.4-.2.6-.1.2.1 1.2.6 1.5.7.3.2.5.3.6.5.1.2.1.6-.1.9z" />
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 listings 24 24" aria-hidden="true">
+                                <path d="M12 0a12 12 0 0 0-12 12c0 2.5.8 4.9 2.2 6.9L0 24l5.2-1.6A12 12 0 0 0 24 12 12 12 0 0 0 12 0zm6.6 17.6c-.3.8-1.5.1.5-2.3 1.7-1 .2-2.3.1-3.6-.5-1.5-.7-3-1.8-4.2-3.1-.9-.9-1.7-2-3.2-.3-1.2 0-2 Fav 2.4-.5.5 1.1.6.4 1.3 1.6.2.6-.1.8-.1.2.4-.5.7-.6.7-.5.6-.1.9-.1 1.5.6 1.3.6-.5.7-.6.7-.5.6 0 .7.4 1.5 2.2.2.8 1.6 1.4.2.5.6-.1.9z" />
                             </svg>
                         </button>
                     </div>
@@ -626,88 +617,86 @@ export default function ProductDetails() {
             </div>
 
             {/* Comments Section */}
-            {userId && (
-                <div className="mt-8 bg-white p-4 sm:p-6 rounded-lg shadow-md">
-                    <h2 className="text-xl font-semibold text-[#1E3A8A] mb-4">Bình luận</h2>
-                    {isLoadingComments ? (
-                        <div className="animate-pulse space-y-4">
-                            {[...Array(3)].map((_, i) => (
-                                <div key={i} className="flex items-start gap-4">
-                                    <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+            <div className="mt-8 bg-white p-4 sm:p-6 rounded-lg shadow-md">
+                <h2 className="text-xl font-semibold text-[#1E3A8A] mb-4">Bình luận</h2>
+                {isLoadingComments ? (
+                    <div className="animate-pulse space-y-4">
+                        {[...Array(3)].map((_, i) => (
+                            <div key={i} className="flex items-start gap-4">
+                                <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+                                <div className="flex-1">
+                                    <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
+                                    <div className="h-6 bg-gray-200 rounded w-3/4"></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : comments.length === 0 ? (
+                    <p className="text-[#1F2937] text-center py-4">Chưa có bình luận nào. Hãy là người đầu tiên!</p>
+                ) : (
+                    <div className="space-y-6">
+                        {comments.map((comment) => {
+                            const isAdmin = comment.createdBy.toUpperCase() === "ADMIN";
+                            return (
+                                <div
+                                    key={comment.id}
+                                    className={`flex items-start gap-4 p-4 rounded-lg transition-colors duration-200 ${isAdmin ? "bg-blue-50 border-l-4 border-blue-500" : "bg-gray-50 hover:bg-gray-100"
+                                        }`}
+                                >
+                                    <div className="flex-shrink-0">
+                                        <img
+                                            src={isAdmin ? "/logo.png" : "/avatar.png"}
+                                            alt={`Avatar của ${comment.createdBy}`}
+                                            className="w-10 h-10 rounded-full object-cover border border-gray-200"
+                                        />
+                                    </div>
                                     <div className="flex-1">
-                                        <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-                                        <div className="h-6 bg-gray-200 rounded w-3/4"></div>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <p className={`font-semibold ${isAdmin ? "text-blue-700" : "text-[#1F2937]"}`}>
+                                                    {comment.createdBy}
+                                                </p>
+                                                {isAdmin && (
+                                                    <span className="bg-blue-600 text-white text-xs font-semibold px-2 py-1 rounded">
+                                                        ADMIN
+                                                    </span>
+                                                )}
+                                                <p className="text-sm text-gray-500">
+                                                    {new Date(comment.createdDate).toLocaleString("vi-VN")}
+                                                </p>
+                                            </div>
+                                            {userId && comment.createdBy === userId && (
+                                                <button
+                                                    onClick={() => handleDeleteComment(comment.id)}
+                                                    className="text-[#EF4444] hover:text-[#B91C1C] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#EF4444] p-1"
+                                                    aria-label="Xóa bình luận"
+                                                >
+                                                    <svg
+                                                        className="w-5 h-5"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth="2"
+                                                            d="M6 18L18 6M6 6l12 12"
+                                                        />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                        <p className="text-[#1F2937] mt-2">{comment.content}</p>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    ) : comments.length === 0 ? (
-                        <p className="text-[#1F2937] text-center py-4">Chưa có bình luận nào. Hãy là người đầu tiên!</p>
-                    ) : (
-                        <div className="space-y-6">
-                            {comments.map((comment) => {
-                                const isAdmin = comment.createdBy.toUpperCase() === "ADMIN";
-                                return (
-                                    <div
-                                        key={comment.id}
-                                        className={`flex items-start gap-4 p-4 rounded-lg transition-colors duration-200 ${isAdmin
-                                            ? "bg-blue-50 border-l-4 border-blue-500"
-                                            : "bg-gray-50 hover:bg-gray-100"
-                                            }`}
-                                    >
-                                        <div className="flex-shrink-0">
-                                            <img
-                                                src={isAdmin ? "/logo.png" : "/avatar.png"}
-                                                alt={`Avatar của ${comment.createdBy}`}
-                                                className="w-10 h-10 rounded-full object-cover border border-gray-200"
-                                            />
-                                        </div>
-                                        <div className="flex-1">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <p className={`font-semibold ${isAdmin ? "text-blue-700" : "text-[#1F2937]"}`}>
-                                                        {comment.createdBy}
-                                                    </p>
-                                                    {isAdmin && (
-                                                        <span className="bg-blue-600 text-white text-xs font-semibold px-2 py-1 rounded">
-                                                            ADMIN
-                                                        </span>
-                                                    )}
-                                                    <p className="text-sm text-gray-500">
-                                                        {new Date(comment.createdDate).toLocaleString("vi-VN")}
-                                                    </p>
-                                                </div>
-                                                {userId && comment.createdBy === userId && (
-                                                    <button
-                                                        onClick={() => handleDeleteComment(comment.id)}
-                                                        className="text-[#EF4444] hover:text-[#B91C1C] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#EF4444] p-1"
-                                                        aria-label="Xóa bình luận"
-                                                    >
-                                                        <svg
-                                                            className="w-5 h-5"
-                                                            fill="none"
-                                                            stroke="currentColor"
-                                                            viewBox="0 0 24 24"
-                                                            xmlns="http://www.w3.org/2000/svg"
-                                                        >
-                                                            <path
-                                                                strokeLinecap="round"
-                                                                strokeLinejoin="round"
-                                                                strokeWidth="2"
-                                                                d="M6 18L18 6M6 6l12 12"
-                                                            />
-                                                        </svg>
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <p className="text-[#1F2937] mt-2">{comment.content}</p>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
+                            );
+                        })}
+                    </div>
+                )}
 
+                {userId ? (
                     <form onSubmit={handleCommentSubmit} className="mt-6">
                         <label className="block text-[#1F2937] font-medium mb-2">Thêm bình luận của bạn:</label>
                         <div className="flex items-start gap-4">
@@ -737,21 +726,18 @@ export default function ProductDetails() {
                             </div>
                         </div>
                     </form>
-                </div>
-            )}
-            {!userId && (
-                <div className="mt-8 bg-white p-4 sm:p-6 rounded-lg shadow-md">
-                    <p className="text-[#1F2937] text-center">Vui lòng đăng nhập để xem và gửi bình luận.</p>
-                    <div className="flex justify-center mt-4">
+                ) : (
+                    <div className="mt-6 text-center">
+                        <p className="text-[#1F2937] mb-4">Vui lòng đăng nhập để bình luận.</p>
                         <button
                             onClick={() => navigate("/login", { state: { from: `/product/${id}` } })}
                             className="px-6 py-2 bg-[#3B82F6] text-white rounded-lg hover:bg-[#2563EB] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
                         >
-                            Đăng nhập
+                            Đăng nhập để bình luận
                         </button>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
 
             {/* Related Products Section */}
             {isLoadingRelated ? (
