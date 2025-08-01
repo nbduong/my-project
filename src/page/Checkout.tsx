@@ -397,10 +397,25 @@ export function CheckoutPage() {
                                 <option value="bank">Chuyển khoản ngân hàng</option>
                             </select>
                         </div>
+                        {paymentMethod === 'bank' && (
+                            <div className="mt-4">
+                                <p className="text-sm text-[#1F2937] mb-2">
+                                    Vui lòng quét mã QR dưới đây để thanh toán. Nội dung chuyển khoản: <strong>{'Số điện thoại'}</strong>
+                                </p>
+                                <img
+                                    src={`${API_URL}/qr-code.png`}
+                                    alt="Mã QR thanh toán ngân hàng"
+                                    className="w-48 h-48 object-contain rounded-lg border border-gray-300"
+                                    onError={(e) => {
+                                        e.currentTarget.src = '/QR.png';
+                                    }}
+                                />
+                            </div>
+                        )}
                         <div>
                             <label
                                 htmlFor="shippingMethod"
-                                className="block font-medium text-[#1F2937] mb-1"
+                                className="block font-medium text-[#0e1114] mb-1"
                             >
                                 Đơn vị vận chuyển
                             </label>
